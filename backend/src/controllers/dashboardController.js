@@ -60,6 +60,54 @@ const dashboardController = {
       res.json({ mes: parseInt(m), ano: parseInt(a), resumo });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erro interno.' }); }
   },
+
+  async graficos(req, res) {
+    try {
+      const { mes, ano } = req.query;
+      const m = mes || new Date().getMonth() + 1;
+      const a = ano || new Date().getFullYear();
+
+      // Despesas por Categoria (Pie/Donut)
+      const resCategorias = await pool.query(`
+        SELECT c.nome, c.cor, COALESCE(SUM(cp.valor), 0) as total
+        FROM contas_pagar cp
+        JOIN categorias c ON cp.categoria_id = c.id
+        WHERE cp.usuario_id = $1 AND EXTRACT(MONTH FROM cp.data_vencimento) = $2 AND EXTRACT(YEAR FROM cp.data_vencimento) = $3
+        GROUP BY c.nome, c.cor
+        ORDER BY total DESC
+      `, [req.userId, m, a]);
+
+      // Evolução Diária do Caixa (Line/Bar)
+      const resDiario = await pool.query(`
+        SELECT EXTRACT(DAY FROM data_movimentacao) as dia, tipo, COALESCE(SUM(valor),0) as total
+        FROM movimentacoes
+        WHERE usuario_id = $1 AND EXTRACT(MONTH FROM data_movimentacao) = $2 AND EXTRACT(YEAR FROM data_movimentacao) = $3
+        GROUP BY dia, tipo
+        ORDER BY dia ASC
+      `, [req.userId, m, a]);
+
+      const evolucao = [];
+      const diasNoMes = new Date(a, m, 0).getDate();
+      for(let i=1; i<=diasNoMes; i++) {
+        const entradas = resDiario.rows.find(r => parseInt(r.dia) === i && r.tipo === 'ENTRADA');
+        const saidas = resDiario.rows.find(r => parseInt(r.dia) === i && r.tipo === 'SAIDA');
+        evolucao.push({
+          dia: i,
+          entradas: entradas ? parseFloat(entradas.total) : 0,
+          saidas: saidas ? parseFloat(saidas.total) : 0
+        });
+      }
+
+      res.json({
+        despesasPorCategoria: resCategorias.rows.map(r => ({ nome: r.nome, cor: r.cor, total: parseFloat(r.total) })),
+        evolucaoDiaria: evolucao
+      });
+
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Erro interno.' });
+    }
+  }
 };
 
 module.exports = dashboardController;

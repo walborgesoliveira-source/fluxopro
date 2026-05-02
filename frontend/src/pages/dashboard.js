@@ -31,15 +31,30 @@ export async function renderDashboard(container) {
         <div class="loading-overlay"><div class="spinner"></div></div>
       </div>
     </div>
+    
+    <div class="two-col" style="margin-top:1.5rem">
+      <div class="card">
+        <h3 style="font-size:1rem;font-weight:600;margin-bottom:1rem">Evolução do Caixa (Mês Atual)</h3>
+        <div style="height:300px;position:relative"><canvas id="chartEvolucao"></canvas></div>
+      </div>
+      <div class="card">
+        <h3 style="font-size:1rem;font-weight:600;margin-bottom:1rem">Despesas por Categoria</h3>
+        <div style="height:300px;position:relative;display:flex;justify-content:center"><canvas id="chartCategorias"></canvas></div>
+      </div>
+    </div>
   `;
+
+  let chartLineInstance = null;
+  let chartPieInstance = null;
 
   async function loadData() {
     document.getElementById('currentMonth').textContent = `${getMesNome(mes)} ${ano}`;
 
     try {
-      const [resumo, caixa] = await Promise.all([
+      const [resumo, caixa, graficos] = await Promise.all([
         api.resumo(mes, ano),
         api.caixaOrigem(mes, ano),
+        api.graficos(mes, ano)
       ]);
 
       const saldo = resumo.caixa.saldo;
@@ -110,6 +125,40 @@ export async function renderDashboard(container) {
           </div>
         </div>
       `;
+
+      // Gráficos
+      if (chartLineInstance) chartLineInstance.destroy();
+      if (chartPieInstance) chartPieInstance.destroy();
+
+      const ctxLine = document.getElementById('chartEvolucao').getContext('2d');
+      chartLineInstance = new Chart(ctxLine, {
+        type: 'bar',
+        data: {
+          labels: graficos.evolucaoDiaria.map(d => \`Dia \${d.dia}\`),
+          datasets: [
+            { label: 'Entradas', data: graficos.evolucaoDiaria.map(d => d.entradas), backgroundColor: '#10b981', borderRadius: 4 },
+            { label: 'Saídas', data: graficos.evolucaoDiaria.map(d => d.saidas), backgroundColor: '#ef4444', borderRadius: 4 }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+      });
+
+      const ctxPie = document.getElementById('chartCategorias').getContext('2d');
+      const hasCatData = graficos.despesasPorCategoria.length > 0;
+      chartPieInstance = new Chart(ctxPie, {
+        type: 'doughnut',
+        data: {
+          labels: hasCatData ? graficos.despesasPorCategoria.map(c => c.nome) : ['Nenhuma Despesa'],
+          datasets: [{
+            data: hasCatData ? graficos.despesasPorCategoria.map(c => c.total) : [1],
+            backgroundColor: hasCatData ? graficos.despesasPorCategoria.map(c => c.cor || '#cbd5e1') : ['#e2e8f0'],
+            borderWidth: 0,
+            hoverOffset: 4
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+      });
+
     } catch (err) {
       document.getElementById('statsGrid').innerHTML = `<div class="empty-state"><p>Erro ao carregar dados: ${err.message}</p></div>`;
     }

@@ -70,6 +70,7 @@ const api = {
   // Dashboard
   resumo: (mes, ano) => request('GET', `/dashboard/resumo?mes=${mes}&ano=${ano}`),
   caixaOrigem: (mes, ano) => request('GET', `/dashboard/caixa-origem?mes=${mes}&ano=${ano}`),
+  graficos: (mes, ano) => request('GET', `/dashboard/graficos?mes=${mes}&ano=${ano}`),
 
   // Categorias
   listarCategorias: (tipo = '') => request('GET', `/categorias${tipo ? '?tipo=' + tipo : ''}`),
