@@ -73,6 +73,7 @@ export async function renderContasReceber(container) {
             <td><span class="badge ${c.status==='RECEBIDO'?'badge-success':'badge-warning'}">${c.status==='A_RECEBER'?'A RECEBER':'RECEBIDO'}</span></td>
             <td><div style="display:flex;gap:0.25rem">
               ${c.status==='A_RECEBER'?`<button class="btn btn-sm btn-success" data-receber="${c.id}">Receber</button>`:''}
+              <button class="btn btn-sm btn-secondary" data-editar="${c.id}">✎</button>
               <button class="btn btn-sm btn-danger" data-excluir="${c.id}">✕</button>
             </div></td>
           </tr>`).join('')}</tbody>
@@ -90,6 +91,13 @@ export async function renderContasReceber(container) {
         });
       });
 
+      document.querySelectorAll('[data-editar]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const conta = contas.find(x => x.id == btn.dataset.editar);
+          if (conta) showModal(conta);
+        });
+      });
+
       document.querySelectorAll('[data-excluir]').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!confirm('Excluir esta conta?')) return;
@@ -102,29 +110,32 @@ export async function renderContasReceber(container) {
     }
   }
 
-  function showModal() {
+  function showModal(conta = null) {
+    const isEdit = !!conta;
+    const dataFormatada = conta ? formatDate(conta.data_vencimento).split('/').reverse().join('-') : '';
+
     document.getElementById('modalContainer').innerHTML = `
       <div class="modal-overlay" id="modalOverlay">
         <div class="modal">
-          <div class="modal-header"><h3>Nova Conta a Receber</h3><button id="closeModal" style="font-size:1.5rem;color:var(--text-muted)">✕</button></div>
+          <div class="modal-header"><h3>${isEdit ? 'Editar Conta' : 'Nova Conta a Receber'}</h3><button id="closeModal" style="font-size:1.5rem;color:var(--text-muted)">✕</button></div>
           <form id="formReceber">
             <div class="modal-body">
-              <div class="form-group"><label>Descrição</label><input type="text" class="form-input" id="descricao" required /></div>
+              <div class="form-group"><label>Descrição</label><input type="text" class="form-input" id="descricao" required value="${conta?.descricao || ''}" /></div>
               <div class="two-col">
-                <div class="form-group"><label>Valor (R$)</label><input type="number" step="0.01" class="form-input" id="valor" required /></div>
-                <div class="form-group"><label>Vencimento</label><input type="date" class="form-input" id="data_vencimento" required /></div>
+                <div class="form-group"><label>Valor (R$)</label><input type="number" step="0.01" class="form-input" id="valor" required value="${conta?.valor || ''}" /></div>
+                <div class="form-group"><label>Vencimento</label><input type="date" class="form-input" id="data_vencimento" required value="${dataFormatada}" /></div>
               </div>
               <div class="two-col">
-                <div class="form-group"><label>Tipo</label><select class="form-select" id="tipo"><option value="AVULSO">Avulso</option><option value="RECORRENTE">Recorrente</option></select></div>
-                <div class="form-group"><label>Origem Tipo</label><select class="form-select" id="origem_tipo"><option value="CLIENTE">Cliente</option><option value="SERVICO">Serviço</option><option value="OUTROS">Outros</option></select></div>
+                <div class="form-group"><label>Tipo</label><select class="form-select" id="tipo"><option value="AVULSO" ${conta?.tipo==='AVULSO'?'selected':''}>Avulso</option><option value="RECORRENTE" ${conta?.tipo==='RECORRENTE'?'selected':''}>Recorrente</option></select></div>
+                <div class="form-group"><label>Origem Tipo</label><select class="form-select" id="origem_tipo"><option value="CLIENTE" ${conta?.origem_tipo==='CLIENTE'?'selected':''}>Cliente</option><option value="SERVICO" ${conta?.origem_tipo==='SERVICO'?'selected':''}>Serviço</option><option value="OUTROS" ${conta?.origem_tipo==='OUTROS'?'selected':''}>Outros</option></select></div>
               </div>
               <div class="two-col">
-                <div class="form-group"><label>Origem</label><select class="form-select" id="origem"><option value="PF">Pessoa Física</option><option value="PJ">Pessoa Jurídica</option></select></div>
-                <div class="form-group"><label>Categoria</label><select class="form-select" id="categoria_id"><option value="">Nenhuma</option>${categorias.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('')}</select></div>
+                <div class="form-group"><label>Origem</label><select class="form-select" id="origem"><option value="PF" ${conta?.origem==='PF'?'selected':''}>Pessoa Física</option><option value="PJ" ${conta?.origem==='PJ'?'selected':''}>Pessoa Jurídica</option></select></div>
+                <div class="form-group"><label>Categoria</label><select class="form-select" id="categoria_id"><option value="">Nenhuma</option>${categorias.map(c=>`<option value="${c.id}" ${conta?.categoria_id===c.id?'selected':''}>${c.nome}</option>`).join('')}</select></div>
               </div>
-              <div class="form-group"><label>Observação</label><textarea class="form-input" id="observacao" rows="2"></textarea></div>
+              <div class="form-group"><label>Observação</label><textarea class="form-input" id="observacao" rows="2">${conta?.observacao || ''}</textarea></div>
             </div>
-            <div class="modal-footer"><button type="button" class="btn btn-secondary" id="cancelModal">Cancelar</button><button type="submit" class="btn btn-primary">Salvar</button></div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" id="cancelModal">Cancelar</button><button type="submit" class="btn btn-primary">${isEdit ? 'Salvar Alterações' : 'Salvar'}</button></div>
           </form>
         </div>
       </div>
@@ -138,7 +149,7 @@ export async function renderContasReceber(container) {
     document.getElementById('formReceber').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        await api.criarReceber({
+        const payload = {
           descricao: document.getElementById('descricao').value,
           valor: parseFloat(document.getElementById('valor').value),
           data_vencimento: document.getElementById('data_vencimento').value,
@@ -147,8 +158,15 @@ export async function renderContasReceber(container) {
           origem: document.getElementById('origem').value,
           categoria_id: document.getElementById('categoria_id').value || null,
           observacao: document.getElementById('observacao').value,
-        });
-        toast('Conta a receber criada!', 'success');
+        };
+
+        if (isEdit) {
+          await api.atualizarReceber(conta.id, payload);
+          toast('Conta a receber atualizada!', 'success');
+        } else {
+          await api.criarReceber(payload);
+          toast('Conta a receber criada!', 'success');
+        }
         close();
         loadData();
       } catch(e) { toast(e.message, 'error'); }
@@ -159,7 +177,7 @@ export async function renderContasReceber(container) {
   document.getElementById('nextMonth').addEventListener('click', () => { mes++; if(mes>12){mes=1;ano++;} loadData(); });
   document.getElementById('filterStatus').addEventListener('change', loadData);
   document.getElementById('filterOrigem').addEventListener('change', loadData);
-  document.getElementById('btnNovaReceber').addEventListener('click', showModal);
+  document.getElementById('btnNovaReceber').addEventListener('click', () => showModal());
 
   await loadCategorias();
   loadData();

@@ -83,6 +83,7 @@ export async function renderContasPagar(container) {
               <td>
                 <div style="display:flex;gap:0.25rem">
                   ${c.status === 'PENDENTE' ? `<button class="btn btn-sm btn-success" data-pagar="${c.id}">Pagar</button>` : ''}
+                  <button class="btn btn-sm btn-secondary" data-editar="${c.id}">✎</button>
                   <button class="btn btn-sm btn-danger" data-excluir="${c.id}">✕</button>
                 </div>
               </td>
@@ -103,6 +104,14 @@ export async function renderContasPagar(container) {
         });
       });
 
+      // Editar
+      document.querySelectorAll('[data-editar]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const conta = contas.find(x => x.id == btn.dataset.editar);
+          if (conta) showModal(conta);
+        });
+      });
+
       // Excluir
       document.querySelectorAll('[data-excluir]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -119,29 +128,32 @@ export async function renderContasPagar(container) {
     }
   }
 
-  function showModal() {
+  function showModal(conta = null) {
+    const isEdit = !!conta;
+    const dataFormatada = conta ? formatDate(conta.data_vencimento).split('/').reverse().join('-') : '';
+    
     document.getElementById('modalContainer').innerHTML = `
       <div class="modal-overlay" id="modalOverlay">
         <div class="modal">
-          <div class="modal-header"><h3>Nova Conta a Pagar</h3><button id="closeModal" style="font-size:1.5rem;color:var(--text-muted)">✕</button></div>
+          <div class="modal-header"><h3>${isEdit ? 'Editar Conta' : 'Nova Conta a Pagar'}</h3><button id="closeModal" style="font-size:1.5rem;color:var(--text-muted)">✕</button></div>
           <form id="formPagar">
             <div class="modal-body">
-              <div class="form-group"><label>Descrição</label><input type="text" class="form-input" id="descricao" required /></div>
+              <div class="form-group"><label>Descrição</label><input type="text" class="form-input" id="descricao" required value="${conta?.descricao || ''}" /></div>
               <div class="two-col">
-                <div class="form-group"><label>Valor (R$)</label><input type="number" step="0.01" class="form-input" id="valor" required /></div>
-                <div class="form-group"><label>Vencimento</label><input type="date" class="form-input" id="data_vencimento" required /></div>
+                <div class="form-group"><label>Valor (R$)</label><input type="number" step="0.01" class="form-input" id="valor" required value="${conta?.valor || ''}" /></div>
+                <div class="form-group"><label>Vencimento</label><input type="date" class="form-input" id="data_vencimento" required value="${dataFormatada}" /></div>
               </div>
               <div class="two-col">
-                <div class="form-group"><label>Tipo</label><select class="form-select" id="tipo"><option value="VARIAVEL">Variável</option><option value="FIXA">Fixa</option></select></div>
-                <div class="form-group"><label>Forma Pgto</label><select class="form-select" id="forma_pagamento"><option value="OUTROS">PIX/Outros</option><option value="CARTAO">Cartão</option><option value="DINHEIRO">Dinheiro</option></select></div>
+                <div class="form-group"><label>Tipo</label><select class="form-select" id="tipo"><option value="VARIAVEL" ${conta?.tipo==='VARIAVEL'?'selected':''}>Variável</option><option value="FIXA" ${conta?.tipo==='FIXA'?'selected':''}>Fixa</option></select></div>
+                <div class="form-group"><label>Forma Pgto</label><select class="form-select" id="forma_pagamento"><option value="OUTROS" ${conta?.forma_pagamento==='OUTROS'?'selected':''}>PIX/Outros</option><option value="CARTAO" ${conta?.forma_pagamento==='CARTAO'?'selected':''}>Cartão</option><option value="DINHEIRO" ${conta?.forma_pagamento==='DINHEIRO'?'selected':''}>Dinheiro</option></select></div>
               </div>
               <div class="two-col">
-                <div class="form-group"><label>Origem</label><select class="form-select" id="origem"><option value="PF">Pessoa Física</option><option value="PJ">Pessoa Jurídica</option></select></div>
-                <div class="form-group"><label>Categoria</label><select class="form-select" id="categoria_id"><option value="">Nenhuma</option>${categorias.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('')}</select></div>
+                <div class="form-group"><label>Origem</label><select class="form-select" id="origem"><option value="PF" ${conta?.origem==='PF'?'selected':''}>Pessoa Física</option><option value="PJ" ${conta?.origem==='PJ'?'selected':''}>Pessoa Jurídica</option></select></div>
+                <div class="form-group"><label>Categoria</label><select class="form-select" id="categoria_id"><option value="">Nenhuma</option>${categorias.map(c=>`<option value="${c.id}" ${conta?.categoria_id===c.id?'selected':''}>${c.nome}</option>`).join('')}</select></div>
               </div>
-              <div class="form-group"><label>Observação</label><textarea class="form-input" id="observacao" rows="2"></textarea></div>
+              <div class="form-group"><label>Observação</label><textarea class="form-input" id="observacao" rows="2">${conta?.observacao || ''}</textarea></div>
             </div>
-            <div class="modal-footer"><button type="button" class="btn btn-secondary" id="cancelModal">Cancelar</button><button type="submit" class="btn btn-primary">Salvar</button></div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" id="cancelModal">Cancelar</button><button type="submit" class="btn btn-primary">${isEdit ? 'Salvar Alterações' : 'Salvar'}</button></div>
           </form>
         </div>
       </div>
@@ -155,7 +167,7 @@ export async function renderContasPagar(container) {
     document.getElementById('formPagar').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        await api.criarPagar({
+        const payload = {
           descricao: document.getElementById('descricao').value,
           valor: parseFloat(document.getElementById('valor').value),
           data_vencimento: document.getElementById('data_vencimento').value,
@@ -164,8 +176,15 @@ export async function renderContasPagar(container) {
           origem: document.getElementById('origem').value,
           categoria_id: document.getElementById('categoria_id').value || null,
           observacao: document.getElementById('observacao').value,
-        });
-        toast('Conta criada com sucesso!', 'success');
+        };
+
+        if (isEdit) {
+          await api.atualizarPagar(conta.id, payload);
+          toast('Conta atualizada com sucesso!', 'success');
+        } else {
+          await api.criarPagar(payload);
+          toast('Conta criada com sucesso!', 'success');
+        }
         close();
         loadData();
       } catch(e) { toast(e.message, 'error'); }
@@ -177,7 +196,7 @@ export async function renderContasPagar(container) {
   document.getElementById('filterStatus').addEventListener('change', loadData);
   document.getElementById('filterOrigem').addEventListener('change', loadData);
   document.getElementById('filterTipo').addEventListener('change', loadData);
-  document.getElementById('btnNovaPagar').addEventListener('click', showModal);
+  document.getElementById('btnNovaPagar').addEventListener('click', () => showModal());
 
   await loadCategorias();
   loadData();
