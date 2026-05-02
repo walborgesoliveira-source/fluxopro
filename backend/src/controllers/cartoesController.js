@@ -130,7 +130,7 @@ const cartoesController = {
         }
 
         // Criar registro em contas a pagar vinculado à fatura
-        const descParcela = qtdeParcelas > 1 ? \`\${descricao} (\${i+1}/\${qtdeParcelas})\` : descricao;
+        const descParcela = qtdeParcelas > 1 ? `${descricao} (${i+1}/${qtdeParcelas})` : descricao;
         
         const cp = await client.query(
           `INSERT INTO contas_pagar (usuario_id, categoria_id, cartao_id, fatura_id, descricao, valor, data_vencimento, tipo, forma_pagamento, origem, parcela_atual, total_parcelas)
