@@ -134,7 +134,7 @@ export async function renderDashboard(container) {
       chartLineInstance = new Chart(ctxLine, {
         type: 'bar',
         data: {
-          labels: graficos.evolucaoDiaria.map(d => \`Dia \${d.dia}\`),
+          labels: graficos.evolucaoDiaria.map(d => `Dia ${d.dia}`),
           datasets: [
             { label: 'Entradas', data: graficos.evolucaoDiaria.map(d => d.entradas), backgroundColor: '#10b981', borderRadius: 4 },
             { label: 'Saídas', data: graficos.evolucaoDiaria.map(d => d.saidas), backgroundColor: '#ef4444', borderRadius: 4 }
