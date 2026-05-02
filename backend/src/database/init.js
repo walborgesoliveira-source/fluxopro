@@ -53,6 +53,10 @@ CREATE TABLE IF NOT EXISTS contas_pagar (
   origem VARCHAR(5) DEFAULT 'PF' CHECK (origem IN ('PF', 'PJ')),
   observacao TEXT,
   recorrente BOOLEAN DEFAULT false,
+  cartao_id INTEGER REFERENCES cartoes(id) ON DELETE SET NULL,
+  fatura_id INTEGER REFERENCES faturas(id) ON DELETE SET NULL,
+  parcela_atual INTEGER,
+  total_parcelas INTEGER,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

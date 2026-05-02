@@ -8,6 +8,7 @@ import { renderLogin, renderRegister } from './pages/auth.js';
 import { renderDashboard } from './pages/dashboard.js';
 import { renderContasPagar } from './pages/contasPagar.js';
 import { renderContasReceber } from './pages/contasReceber.js';
+import { renderCartoes } from './pages/cartoes.js';
 
 const app = document.getElementById('app');
 
@@ -50,9 +51,9 @@ function renderLayout(activePage) {
           </a>
 
           <div class="nav-section-title">Em breve</div>
-          <span class="nav-item" style="opacity:0.4;cursor:default">
+          <a class="nav-item ${activePage === 'cartoes' ? 'active' : ''}" href="#/cartoes">
             <span class="nav-icon">💳</span> Cartões
-          </span>
+          </a>
           <span class="nav-item" style="opacity:0.4;cursor:default">
             <span class="nav-icon">🔁</span> Recorrências
           </span>
@@ -140,6 +141,7 @@ async function router() {
   let activePage = 'dashboard';
   if (path === '/contas-pagar') activePage = 'pagar';
   if (path === '/contas-receber') activePage = 'receber';
+  if (path === '/cartoes') activePage = 'cartoes';
 
   const content = renderLayout(activePage);
 
@@ -152,6 +154,9 @@ async function router() {
       break;
     case '/contas-receber':
       await renderContasReceber(content);
+      break;
+    case '/cartoes':
+      await renderCartoes(content);
       break;
     default:
       window.location.hash = '#/dashboard';

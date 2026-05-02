@@ -74,6 +74,13 @@ const api = {
   // Categorias
   listarCategorias: (tipo = '') => request('GET', `/categorias${tipo ? '?tipo=' + tipo : ''}`),
   criarCategoria: (dados) => request('POST', '/categorias', dados),
+
+  // Cartões e Faturas
+  listarCartoes: () => request('GET', '/cartoes'),
+  criarCartao: (dados) => request('POST', '/cartoes', dados),
+  excluirCartao: (id) => request('DELETE', `/cartoes/${id}`),
+  listarFaturas: (cartaoId = '') => request('GET', `/cartoes/faturas${cartaoId ? '?cartao_id=' + cartaoId : ''}`),
+  adicionarCompra: (dados) => request('POST', '/cartoes/compras', dados),
 };
 
 export { api, getToken, setToken, setUser, getUser, clearAuth };
