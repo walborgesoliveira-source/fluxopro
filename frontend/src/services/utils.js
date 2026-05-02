@@ -10,7 +10,10 @@ export function formatCurrency(value) {
 
 export function formatDate(dateStr) {
   if (!dateStr) return '—';
-  const d = new Date(dateStr + 'T00:00:00');
+  // Remove possible timestamp parts if it comes from PostgreSQL ISO string
+  const cleanDate = String(dateStr).split('T')[0];
+  const d = new Date(cleanDate + 'T00:00:00');
+  if (isNaN(d.getTime())) return 'Data Inválida';
   return d.toLocaleDateString('pt-BR');
 }
 
