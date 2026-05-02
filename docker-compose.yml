@@ -1,0 +1,77 @@
+# FluxoPro — Docker Compose
+# Ambiente: app + db + nginx
+# Uso: docker compose up -d
+
+version: '3.8'
+
+services:
+  # ========================================
+  # PostgreSQL Database
+  # ========================================
+  db:
+    image: postgres:16-alpine
+    container_name: fluxopro_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fluxopro
+      POSTGRES_USER: fluxopro_admin
+      POSTGRES_PASSWORD: fluxopro_secret_2026
+    volumes:
+      - fluxopro_db_data:/var/lib/postgresql/data
+    networks:
+      - fluxopro_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fluxopro_admin -d fluxopro"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========================================
+  # FluxoPro Application (Node.js)
+  # ========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fluxopro_app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: fluxopro
+      DB_USER: fluxopro_admin
+      DB_PASSWORD: fluxopro_secret_2026
+      JWT_SECRET: fluxopro_jwt_super_secret_key_2026
+      JWT_EXPIRES_IN: 7d
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - fluxopro_internal
+    expose:
+      - "3000"
+
+  # ========================================
+  # Nginx Reverse Proxy
+  # ========================================
+  nginx:
+    image: nginx:alpine
+    container_name: fluxopro_nginx
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - fluxopro_internal
+
+volumes:
+  fluxopro_db_data:
+
+networks:
+  fluxopro_internal:
+    driver: bridge
