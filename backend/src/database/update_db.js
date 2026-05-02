@@ -8,6 +8,8 @@ async function updateDB() {
       ALTER TABLE contas_pagar ADD COLUMN IF NOT EXISTS fatura_id INTEGER REFERENCES faturas(id) ON DELETE SET NULL;
       ALTER TABLE contas_pagar ADD COLUMN IF NOT EXISTS parcela_atual INTEGER;
       ALTER TABLE contas_pagar ADD COLUMN IF NOT EXISTS total_parcelas INTEGER;
+      ALTER TABLE contas_pagar ADD COLUMN IF NOT EXISTS recorrencia_id INTEGER REFERENCES recorrencias(id) ON DELETE SET NULL;
+      ALTER TABLE contas_receber ADD COLUMN IF NOT EXISTS recorrencia_id INTEGER REFERENCES recorrencias(id) ON DELETE SET NULL;
     `);
     console.log('✅ Banco de dados atualizado com sucesso! Novas colunas adicionadas à tabela contas_pagar.');
   } catch (error) {

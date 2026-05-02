@@ -81,6 +81,13 @@ const api = {
   excluirCartao: (id) => request('DELETE', `/cartoes/${id}`),
   listarFaturas: (cartaoId = '') => request('GET', `/cartoes/faturas${cartaoId ? '?cartao_id=' + cartaoId : ''}`),
   adicionarCompra: (dados) => request('POST', '/cartoes/compras', dados),
+
+  // Recorrências
+  listarRecorrencias: (tipo = '') => request('GET', `/recorrencias${tipo ? '?tipo=' + tipo : ''}`),
+  criarRecorrencia: (dados) => request('POST', '/recorrencias', dados),
+  atualizarRecorrencia: (id, dados) => request('PUT', `/recorrencias/${id}`, dados),
+  excluirRecorrencia: (id) => request('DELETE', `/recorrencias/${id}`),
+  gerarRecorrenciasMensal: (mes, ano) => request('POST', '/recorrencias/gerar', { mes, ano }),
 };
 
 export { api, getToken, setToken, setUser, getUser, clearAuth };

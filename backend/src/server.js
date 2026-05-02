@@ -10,6 +10,7 @@ const contasReceberRoutes = require('./routes/contasReceber');
 const dashboardRoutes = require('./routes/dashboard');
 const categoriasRoutes = require('./routes/categorias');
 const cartoesRoutes = require('./routes/cartoes');
+const recorrenciasRoutes = require('./routes/recorrencias');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,6 +30,7 @@ app.use('/api/contas-receber', authMiddleware, contasReceberRoutes);
 app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 app.use('/api/categorias', authMiddleware, categoriasRoutes);
 app.use('/api/cartoes', authMiddleware, cartoesRoutes);
+app.use('/api/recorrencias', authMiddleware, recorrenciasRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

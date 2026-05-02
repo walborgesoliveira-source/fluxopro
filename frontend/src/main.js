@@ -9,6 +9,7 @@ import { renderDashboard } from './pages/dashboard.js';
 import { renderContasPagar } from './pages/contasPagar.js';
 import { renderContasReceber } from './pages/contasReceber.js';
 import { renderCartoes } from './pages/cartoes.js';
+import { renderRecorrencias } from './pages/recorrencias.js';
 
 const app = document.getElementById('app');
 
@@ -54,9 +55,9 @@ function renderLayout(activePage) {
           <a class="nav-item ${activePage === 'cartoes' ? 'active' : ''}" href="#/cartoes">
             <span class="nav-icon">💳</span> Cartões
           </a>
-          <span class="nav-item" style="opacity:0.4;cursor:default">
+          <a class="nav-item ${activePage === 'recorrencias' ? 'active' : ''}" href="#/recorrencias">
             <span class="nav-icon">🔁</span> Recorrências
-          </span>
+          </a>
         </nav>
 
         <div class="sidebar-footer">
@@ -142,6 +143,7 @@ async function router() {
   if (path === '/contas-pagar') activePage = 'pagar';
   if (path === '/contas-receber') activePage = 'receber';
   if (path === '/cartoes') activePage = 'cartoes';
+  if (path === '/recorrencias') activePage = 'recorrencias';
 
   const content = renderLayout(activePage);
 
@@ -157,6 +159,9 @@ async function router() {
       break;
     case '/cartoes':
       await renderCartoes(content);
+      break;
+    case '/recorrencias':
+      await renderRecorrencias(content);
       break;
     default:
       window.location.hash = '#/dashboard';

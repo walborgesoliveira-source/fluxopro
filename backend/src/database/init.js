@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS contas_pagar (
   fatura_id INTEGER REFERENCES faturas(id) ON DELETE SET NULL,
   parcela_atual INTEGER,
   total_parcelas INTEGER,
+  recorrencia_id INTEGER REFERENCES recorrencias(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -77,6 +78,7 @@ CREATE TABLE IF NOT EXISTS contas_receber (
   origem_tipo VARCHAR(10) DEFAULT 'CLIENTE' CHECK (origem_tipo IN ('CLIENTE', 'SERVICO', 'OUTROS')),
   origem VARCHAR(5) DEFAULT 'PF' CHECK (origem IN ('PF', 'PJ')),
   observacao TEXT,
+  recorrencia_id INTEGER REFERENCES recorrencias(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
