@@ -89,6 +89,10 @@ const api = {
   atualizarRecorrencia: (id, dados) => request('PUT', `/recorrencias/${id}`, dados),
   excluirRecorrencia: (id) => request('DELETE', `/recorrencias/${id}`),
   gerarRecorrenciasMensal: (mes, ano) => request('POST', '/recorrencias/gerar', { mes, ano }),
+
+  // Relatórios
+  relatorioComparativo: () => request('GET', '/relatorios/comparativo'),
+  relatorioProjecao: () => request('GET', '/relatorios/projecao'),
 };
 
 export { api, getToken, setToken, setUser, getUser, clearAuth };
