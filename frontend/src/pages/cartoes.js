@@ -1,6 +1,6 @@
 import { api } from '../services/api.js';
 import { formatCurrency, formatDate } from '../services/utils.js';
-import { showToast } from '../components/toast.js';
+import { toast } from '../components/toast.js';
 
 export async function renderCartoes(container) {
   container.innerHTML = `
@@ -170,7 +170,7 @@ export async function renderCartoes(container) {
       renderFaturas(resFaturas.faturas);
       populateSelects();
     } catch (e) {
-      showToast('Erro ao carregar dados dos cartões.', 'error');
+      toast('Erro ao carregar dados dos cartões.', 'error');
     }
   }
 
@@ -240,10 +240,10 @@ export async function renderCartoes(container) {
         if (confirm('Tem certeza? Isso excluirá o cartão (as faturas e despesas já geradas serão mantidas em Contas a Pagar).')) {
           try {
             await api.excluirCartao(e.currentTarget.dataset.id);
-            showToast('Cartão excluído com sucesso!');
+            toast('Cartão excluído com sucesso!');
             loadData();
           } catch (err) {
-            showToast(err.message, 'error');
+            toast(err.message, 'error');
           }
         }
       });
@@ -290,12 +290,12 @@ export async function renderCartoes(container) {
 
     try {
       await api.criarCartao(dados);
-      showToast('Cartão salvo!');
+      toast('Cartão salvo!');
       modalNovoCartao.classList.remove('active');
       formNovoCartao.reset();
       loadData();
     } catch (err) {
-      showToast(err.message, 'error');
+      toast(err.message, 'error');
     }
   });
 
@@ -314,12 +314,12 @@ export async function renderCartoes(container) {
 
     try {
       await api.adicionarCompra(dados);
-      showToast('Compra lançada com sucesso!');
+      toast('Compra lançada com sucesso!');
       modalLancarCompra.classList.remove('active');
       formLancarCompra.reset();
       loadData();
     } catch (err) {
-      showToast(err.message, 'error');
+      toast(err.message, 'error');
     }
   });
 
