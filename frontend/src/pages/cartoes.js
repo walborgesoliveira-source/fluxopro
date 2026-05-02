@@ -187,15 +187,15 @@ export async function renderCartoes(container) {
     const comboCat = document.getElementById('compraCategoria');
 
     // Cartoes no Lancar Compra
-    compraCartao.innerHTML = cartoes.map(c => \`<option value="\${c.id}">\${c.nome} (Venc: dia \${c.dia_vencimento})</option>\`).join('');
+    compraCartao.innerHTML = cartoes.map(c => `<option value="${c.id}">${c.nome} (Venc: dia ${c.dia_vencimento})</option>`).join('');
     
     // Cartoes no Filtro de faturas
     const currentFiltro = comboFiltro.value;
-    comboFiltro.innerHTML = '<option value="">Todos os Cartões</option>' + cartoes.map(c => \`<option value="\${c.id}">\${c.nome}</option>\`).join('');
+    comboFiltro.innerHTML = '<option value="">Todos os Cartões</option>' + cartoes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
     comboFiltro.value = currentFiltro; // mantem selecao
 
     // Categorias
-    comboCat.innerHTML = categorias.map(c => \`<option value="\${c.id}">\${c.nome}</option>\`).join('');
+    comboCat.innerHTML = categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
   }
 
   function renderCartoesList(lista) {
@@ -211,28 +211,28 @@ export async function renderCartoes(container) {
       if (c.bandeira === 'Visa') bg = 'linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%)';
       if (c.nome.toLowerCase().includes('nubank')) bg = 'linear-gradient(135deg, #7e22ce 0%, #a855f7 100%)';
 
-      return \`
-      <div class="card" style="background: \${bg}; color: white; border: none; position: relative; overflow: hidden; border-radius: 16px;">
+      return `
+      <div class="card" style="background: ${bg}; color: white; border: none; position: relative; overflow: hidden; border-radius: 16px;">
         <div style="position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
         
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem;">
-          <h3 style="font-size: 1.25rem; font-weight: 600; margin: 0;">\${c.nome}</h3>
-          <span style="font-weight: 600; opacity: 0.9">\${c.bandeira || ''}</span>
+          <h3 style="font-size: 1.25rem; font-weight: 600; margin: 0;">${c.nome}</h3>
+          <span style="font-weight: 600; opacity: 0.9">${c.bandeira || ''}</span>
         </div>
         
         <div style="margin-bottom: 1.5rem;">
           <div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 0.25rem;">Limite Total</div>
-          <div style="font-size: 1.5rem; font-weight: 700;">\${formatCurrency(c.limite)}</div>
+          <div style="font-size: 1.5rem; font-weight: 700;">${formatCurrency(c.limite)}</div>
         </div>
         
         <div style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.9; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 1rem;">
-          <div>Fechamento: Dia \${c.dia_fechamento}</div>
-          <div>Vencimento: Dia \${c.dia_vencimento}</div>
+          <div>Fechamento: Dia ${c.dia_fechamento}</div>
+          <div>Vencimento: Dia ${c.dia_vencimento}</div>
         </div>
         
-        <button class="btn-delete-cartao" data-id="\${c.id}" style="position: absolute; top: 1rem; right: 1rem; background: rgba(0,0,0,0.2); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Excluir Cartão">✕</button>
+        <button class="btn-delete-cartao" data-id="${c.id}" style="position: absolute; top: 1rem; right: 1rem; background: rgba(0,0,0,0.2); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Excluir Cartão">✕</button>
       </div>
-    \`}).join('');
+    `}).join('');
 
     // Binds de exclusao
     document.querySelectorAll('.btn-delete-cartao').forEach(btn => {
@@ -262,18 +262,18 @@ export async function renderCartoes(container) {
       if (f.status === 'FECHADA') badgeColor = 'var(--warning-color)';
       if (f.status === 'PAGA') badgeColor = 'var(--success-color)';
 
-      return \`
+      return `
         <tr>
-          <td style="font-weight:600">\${String(f.mes_referencia).padStart(2, '0')}/\${f.ano_referencia}</td>
-          <td>\${f.cartao_nome}</td>
-          <td style="font-weight:700">\${formatCurrency(f.valor_total)}</td>
+          <td style="font-weight:600">${String(f.mes_referencia).padStart(2, '0')}/${f.ano_referencia}</td>
+          <td>${f.cartao_nome}</td>
+          <td style="font-weight:700">${formatCurrency(f.valor_total)}</td>
           <td>
-            <span class="status-badge" style="background: \${badgeColor}20; color: \${badgeColor}; padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600;">
-              \${f.status}
+            <span class="status-badge" style="background: ${badgeColor}20; color: ${badgeColor}; padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600;">
+              ${f.status}
             </span>
           </td>
         </tr>
-      \`;
+      `;
     }).join('');
   }
 
