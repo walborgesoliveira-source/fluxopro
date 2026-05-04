@@ -106,6 +106,14 @@ const contasPagarController = {
         return res.status(404).json({ error: 'Conta não encontrada.' });
       }
 
+      // Se pertencer a uma fatura de cartão, recalcular o total
+      const faturaId = result.rows[0].fatura_id;
+      if (faturaId) {
+        const sum = await pool.query('SELECT SUM(valor) as total FROM contas_pagar WHERE fatura_id = $1', [faturaId]);
+        const novoTotal = sum.rows[0].total || 0;
+        await pool.query('UPDATE faturas SET valor_total = $1 WHERE id = $2', [novoTotal, faturaId]);
+      }
+
       // Se status mudou para PAGO, registrar movimentação
       if (status === 'PAGO') {
         await pool.query(
@@ -129,12 +137,26 @@ const contasPagarController = {
     try {
       const { id } = req.params;
       const result = await pool.query(
-        'DELETE FROM contas_pagar WHERE id = $1 AND usuario_id = $2 RETURNING id',
+        'DELETE FROM contas_pagar WHERE id = $1 AND usuario_id = $2 RETURNING fatura_id',
         [id, req.userId]
       );
 
       if (result.rows.length === 0) {
         return res.status(404).json({ error: 'Conta não encontrada.' });
+      }
+
+      // Se pertencer a uma fatura de cartão, recalcular o total
+      const faturaId = result.rows[0].fatura_id;
+      if (faturaId) {
+        const sum = await pool.query('SELECT SUM(valor) as total FROM contas_pagar WHERE fatura_id = $1', [faturaId]);
+        const novoTotal = sum.rows[0].total || 0;
+        
+        if (novoTotal === 0) {
+          // Se a fatura ficar zerada, deleta a fatura para limpar sujeira
+          await pool.query('DELETE FROM faturas WHERE id = $1', [faturaId]);
+        } else {
+          await pool.query('UPDATE faturas SET valor_total = $1 WHERE id = $2', [novoTotal, faturaId]);
+        }
       }
 
       res.json({ message: 'Conta excluída com sucesso!' });
