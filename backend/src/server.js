@@ -44,11 +44,23 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
+// Migration automática: adiciona colunas novas sem quebrar banco existente
+const pool = require('./database/connection');
+async function runMigrations() {
+  try {
+    await pool.query(`ALTER TABLE cartoes ADD COLUMN IF NOT EXISTS melhor_dia_compra INTEGER CHECK (melhor_dia_compra BETWEEN 1 AND 31)`);
+    console.log('✅ Migration: coluna melhor_dia_compra verificada.');
+  } catch (e) {
+    console.error('⚠️ Erro na migration:', e.message);
+  }
+}
+
 // Iniciar servidor
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`\n🚀 FluxoPro API rodando na porta ${PORT}`);
   console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 http://localhost:${PORT}\n`);
+  await runMigrations();
 });
 
 module.exports = app;

@@ -68,6 +68,28 @@ const cartoesController = {
     }
   },
 
+  async editarCartao(req, res) {
+    try {
+      const { id } = req.params;
+      const { nome, bandeira, limite, dia_fechamento, dia_vencimento, melhor_dia_compra } = req.body;
+      const result = await pool.query(
+        `UPDATE cartoes SET
+          nome = COALESCE($1, nome),
+          bandeira = COALESCE($2, bandeira),
+          limite = COALESCE($3, limite),
+          dia_fechamento = COALESCE($4, dia_fechamento),
+          dia_vencimento = COALESCE($5, dia_vencimento),
+          melhor_dia_compra = COALESCE($6, melhor_dia_compra)
+         WHERE id = $7 AND usuario_id = $8 RETURNING *`,
+        [nome, bandeira, limite, dia_fechamento, dia_vencimento, melhor_dia_compra, id, req.userId]
+      );
+      if (!result.rows.length) return res.status(404).json({ error: 'Cartão não encontrado.' });
+      res.json({ cartao: result.rows[0], message: 'Cartão atualizado com sucesso!' });
+    } catch (e) {
+      console.error(e); res.status(500).json({ error: 'Erro interno.' });
+    }
+  },
+
   // ==========================
   // FATURAS E COMPRAS
   // ==========================

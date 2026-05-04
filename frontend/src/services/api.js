@@ -79,6 +79,7 @@ const api = {
   // Cartões e Faturas
   listarCartoes: () => request('GET', '/cartoes'),
   criarCartao: (dados) => request('POST', '/cartoes', dados),
+  editarCartao: (id, dados) => request('PUT', `/cartoes/${id}`, dados),
   excluirCartao: (id) => request('DELETE', `/cartoes/${id}`),
   listarFaturas: (cartaoId = '') => request('GET', `/cartoes/faturas${cartaoId ? '?cartao_id=' + cartaoId : ''}`),
   excluirFatura: (id) => request('DELETE', `/cartoes/faturas/${id}`),

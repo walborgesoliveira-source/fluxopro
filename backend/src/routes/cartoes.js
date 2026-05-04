@@ -5,6 +5,7 @@ const cartoesController = require('../controllers/cartoesController');
 // Rotas de cartões
 router.get('/', cartoesController.listarCartoes);
 router.post('/', cartoesController.criarCartao);
+router.put('/:id', cartoesController.editarCartao);
 router.delete('/:id', cartoesController.excluirCartao);
 
 // Rotas de faturas e compras

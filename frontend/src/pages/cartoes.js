@@ -43,6 +43,58 @@ export async function renderCartoes(container) {
       </div>
     </div>
 
+    <!-- MODAL: Editar Cartão -->
+    <div class="modal-overlay" id="overlayEditarCartao" style="display: none;">
+      <div class="modal">
+        <div class="modal-content" style="max-width: 500px">
+          <div class="modal-header">
+            <h2 class="modal-title">Editar Cartão</h2>
+            <button class="modal-close" id="fecharEditarCartao">&times;</button>
+          </div>
+          <div class="modal-body">
+            <form id="formEditarCartao">
+              <input type="hidden" id="editCartaoId">
+              <div class="form-group">
+                <label class="form-label">Nome do Cartão</label>
+                <input type="text" id="editCartaoNome" class="form-control" required>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                  <label class="form-label">Bandeira</label>
+                  <select id="editCartaoBandeira" class="form-control">
+                    <option value="Mastercard">Mastercard</option>
+                    <option value="Visa">Visa</option>
+                    <option value="Elo">Elo</option>
+                    <option value="American Express">American Express</option>
+                    <option value="Outra">Outra</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Limite Total (R$)</label>
+                  <input type="number" id="editCartaoLimite" class="form-control" step="0.01" min="0">
+                </div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                  <label class="form-label">Dia Fechamento</label>
+                  <input type="number" id="editCartaoFechamento" class="form-control" min="1" max="31" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Dia Vencimento</label>
+                  <input type="number" id="editCartaoVencimento" class="form-control" min="1" max="31" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Melhor Dia Compra</label>
+                  <input type="number" id="editCartaoMelhorDia" class="form-control" min="1" max="31" placeholder="Ex: 27">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem;">Salvar Alterações</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- MODAL: Novo Cartão -->
     <div class="modal-overlay" id="overlayNovoCartao" style="display: none;">
       <div class="modal">
@@ -192,8 +244,44 @@ export async function renderCartoes(container) {
   document.getElementById('fecharFatura').addEventListener('click', () => overlayFatura.style.display = 'none');
   document.getElementById('btnFecharFaturaRodape').addEventListener('click', () => overlayFatura.style.display = 'none');
 
+  // Modal Editar Cartão
+  const overlayEditarCartao = document.getElementById('overlayEditarCartao');
+  document.getElementById('fecharEditarCartao').addEventListener('click', () => overlayEditarCartao.style.display = 'none');
+
+  window.abrirEditarCartao = function(id) {
+    const cartao = cartoes.find(c => c.id == id);
+    if (!cartao) return;
+    document.getElementById('editCartaoId').value = cartao.id;
+    document.getElementById('editCartaoNome').value = cartao.nome;
+    document.getElementById('editCartaoBandeira').value = cartao.bandeira || 'Mastercard';
+    document.getElementById('editCartaoLimite').value = cartao.limite || 0;
+    document.getElementById('editCartaoFechamento').value = cartao.dia_fechamento || '';
+    document.getElementById('editCartaoVencimento').value = cartao.dia_vencimento || '';
+    document.getElementById('editCartaoMelhorDia').value = cartao.melhor_dia_compra || '';
+    overlayEditarCartao.style.display = 'flex';
+  };
+
+  document.getElementById('formEditarCartao').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editCartaoId').value;
+    const dados = {
+      nome: document.getElementById('editCartaoNome').value,
+      bandeira: document.getElementById('editCartaoBandeira').value,
+      limite: parseFloat(document.getElementById('editCartaoLimite').value) || 0,
+      dia_fechamento: parseInt(document.getElementById('editCartaoFechamento').value),
+      dia_vencimento: parseInt(document.getElementById('editCartaoVencimento').value),
+      melhor_dia_compra: parseInt(document.getElementById('editCartaoMelhorDia').value) || null,
+    };
+    try {
+      await api.editarCartao(id, dados);
+      toast('Cartão atualizado com sucesso!');
+      overlayEditarCartao.style.display = 'none';
+      loadData();
+    } catch(err) { toast(err.message, 'error'); }
+  });
+
   // Fechar ao clicar fora do modal (no fundo escuro)
-  [overlayNovoCartao, overlayLancarCompra, overlayFatura].forEach(overlay => {
+  [overlayNovoCartao, overlayLancarCompra, overlayFatura, overlayEditarCartao].forEach(overlay => {
     if (overlay) {
       overlay.addEventListener('click', (e) => {
         if (e.target === e.currentTarget) overlay.style.display = 'none';
@@ -275,14 +363,23 @@ export async function renderCartoes(container) {
           <div style="font-size: 1.5rem; font-weight: 700;">${formatCurrency(c.limite)}</div>
         </div>
         
-        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.9; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 1rem;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.9; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 1rem; flex-wrap: wrap; gap: 0.5rem;">
           <div>Fechamento: Dia ${c.dia_fechamento}</div>
           <div>Vencimento: Dia ${c.dia_vencimento}</div>
+          ${c.melhor_dia_compra ? `<div style="width:100%; margin-top:0.25rem;">🛒 Melhor dia de compra: <strong>Dia ${c.melhor_dia_compra}</strong></div>` : ''}
         </div>
         
+        <button class="btn-edit-cartao" data-id="${c.id}" style="position: absolute; top: 1rem; right: 2.5rem; background: rgba(0,0,0,0.2); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Editar Cartão">✎</button>
         <button class="btn-delete-cartao" data-id="${c.id}" style="position: absolute; top: 1rem; right: 1rem; background: rgba(0,0,0,0.2); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Excluir Cartão">✕</button>
       </div>
     `}).join('');
+
+    // Bind editar cartão
+    document.querySelectorAll('.btn-edit-cartao').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        window.abrirEditarCartao(e.currentTarget.dataset.id);
+      });
+    });
 
     // Binds de exclusao
     document.querySelectorAll('.btn-delete-cartao').forEach(btn => {
