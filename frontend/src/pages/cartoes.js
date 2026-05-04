@@ -161,6 +161,9 @@ export async function renderCartoes(container) {
               </table>
             </div>
           </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="btnFecharFaturaRodape">Fechar Lançamentos</button>
+          </div>
         </div>
       </div>
     </div>
@@ -187,6 +190,16 @@ export async function renderCartoes(container) {
 
   const overlayFatura = document.getElementById('overlayFatura');
   document.getElementById('fecharFatura').addEventListener('click', () => overlayFatura.style.display = 'none');
+  document.getElementById('btnFecharFaturaRodape').addEventListener('click', () => overlayFatura.style.display = 'none');
+
+  // Fechar ao clicar fora do modal (no fundo escuro)
+  [overlayNovoCartao, overlayLancarCompra, overlayFatura].forEach(overlay => {
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) overlay.style.display = 'none';
+      });
+    }
+  });
 
   // Estado
   let cartoes = [];
