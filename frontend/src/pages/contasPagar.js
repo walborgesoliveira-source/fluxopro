@@ -145,7 +145,7 @@ export async function renderContasPagar(container) {
               </div>
               <div class="two-col">
                 <div class="form-group"><label>Tipo</label><select class="form-select" id="tipo"><option value="VARIAVEL" ${conta?.tipo==='VARIAVEL'?'selected':''}>Variável</option><option value="FIXA" ${conta?.tipo==='FIXA'?'selected':''}>Fixa</option></select></div>
-                <div class="form-group"><label>Forma Pgto</label><select class="form-select" id="forma_pagamento"><option value="OUTROS" ${conta?.forma_pagamento==='OUTROS'?'selected':''}>PIX/Outros</option><option value="CARTAO" ${conta?.forma_pagamento==='CARTAO'?'selected':''}>Cartão</option><option value="DINHEIRO" ${conta?.forma_pagamento==='DINHEIRO'?'selected':''}>Dinheiro</option></select></div>
+                <div class="form-group"><label>Forma Pgto</label><select class="form-select" id="forma_pagamento"><option value="OUTROS" ${conta?.forma_pagamento==='OUTROS'?'selected':''}>PIX/Outros</option><option value="DINHEIRO" ${conta?.forma_pagamento==='DINHEIRO'?'selected':''}>Dinheiro</option></select></div>
               </div>
               <div class="two-col">
                 <div class="form-group"><label>Origem</label><select class="form-select" id="origem"><option value="PF" ${conta?.origem==='PF'?'selected':''}>Pessoa Física</option><option value="PJ" ${conta?.origem==='PJ'?'selected':''}>Pessoa Jurídica</option></select></div>
