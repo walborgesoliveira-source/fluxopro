@@ -130,6 +130,34 @@ export async function renderCartoes(container) {
         </div>
       </div>
     </div>
+
+    <!-- MODAL: Detalhes da Fatura -->
+    <div class="modal" id="modalFatura">
+      <div class="modal-content" style="max-width: 800px">
+        <div class="modal-header">
+          <h2 class="modal-title">Detalhes da Fatura</h2>
+          <button class="modal-close" id="fecharFatura">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Data Venc.</th>
+                  <th>Descrição</th>
+                  <th>Categoria</th>
+                  <th>Valor</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="comprasFaturaBody">
+                <!-- Preenchido via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
 
   // Referências
@@ -150,6 +178,9 @@ export async function renderCartoes(container) {
     modalLancarCompra.classList.add('active');
   });
   document.getElementById('fecharLancarCompra').addEventListener('click', () => modalLancarCompra.classList.remove('active'));
+
+  const modalFatura = document.getElementById('modalFatura');
+  document.getElementById('fecharFatura').addEventListener('click', () => modalFatura.classList.remove('active'));
 
   // Estado
   let cartoes = [];
@@ -271,10 +302,82 @@ export async function renderCartoes(container) {
             <span class="status-badge" style="background: ${badgeColor}20; color: ${badgeColor}; padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600;">
               ${f.status}
             </span>
+            <button class="btn btn-sm btn-secondary btn-ver-fatura" data-id="${f.id}" style="margin-left: 0.5rem">Ver Lançamentos</button>
           </td>
         </tr>
       `;
     }).join('');
+
+    document.querySelectorAll('.btn-ver-fatura').forEach(btn => {
+      btn.addEventListener('click', () => abrirFaturaDetalhes(btn.dataset.id));
+    });
+  }
+
+  let faturaAtualId = null;
+
+  async function abrirFaturaDetalhes(id) {
+    faturaAtualId = id;
+    try {
+      const res = await api.listarComprasFatura(id);
+      renderComprasFatura(res.compras);
+      modalFatura.classList.add('active');
+    } catch (e) {
+      toast('Erro ao carregar compras.', 'error');
+    }
+  }
+
+  function renderComprasFatura(compras) {
+    const tbody = document.getElementById('comprasFaturaBody');
+    if (compras.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum lançamento encontrado.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = compras.map(c => `
+      <tr>
+        <td>${formatDate(c.data_vencimento)}</td>
+        <td>${c.descricao}</td>
+        <td>${c.categoria_nome || '-'}</td>
+        <td style="font-weight:600; color:var(--danger)">${formatCurrency(c.valor)}</td>
+        <td>
+          <button class="btn btn-sm btn-secondary btn-editar-compra" data-id="${c.id}">✎</button>
+          <button class="btn btn-sm btn-danger btn-excluir-compra" data-id="${c.id}">✕</button>
+        </td>
+      </tr>
+    `).join('');
+
+    document.querySelectorAll('.btn-editar-compra').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const compra = compras.find(x => x.id == id);
+        const novoValorStr = prompt('Novo valor (ex: 150.00):', compra.valor);
+        if (novoValorStr === null) return;
+        const novoValor = parseFloat(novoValorStr.replace(',', '.'));
+        if (isNaN(novoValor)) return toast('Valor inválido.', 'error');
+        
+        const novaDescricao = prompt('Nova descrição:', compra.descricao);
+        if (!novaDescricao) return;
+
+        try {
+          await api.editarCompraCartao(id, { valor: novoValor, descricao: novaDescricao });
+          toast('Lançamento atualizado!');
+          abrirFaturaDetalhes(faturaAtualId);
+          loadData();
+        } catch(e) { toast(e.message, 'error'); }
+      });
+    });
+
+    document.querySelectorAll('.btn-excluir-compra').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Excluir este lançamento da fatura?')) return;
+        try {
+          await api.excluirCompraCartao(btn.dataset.id);
+          toast('Lançamento excluído!');
+          abrirFaturaDetalhes(faturaAtualId);
+          loadData();
+        } catch(e) { toast(e.message, 'error'); }
+      });
+    });
   }
 
   // Submit Novo Cartão

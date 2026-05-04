@@ -52,7 +52,7 @@ function renderLayout(activePage) {
             <span class="nav-icon">📥</span> Contas a Receber
           </a>
 
-          <div class="nav-section-title">Em breve</div>
+          <div class="nav-section-title">Mais Recursos</div>
           <a class="nav-item ${activePage === 'cartoes' ? 'active' : ''}" href="#/cartoes">
             <span class="nav-icon">💳</span> Cartões
           </a>

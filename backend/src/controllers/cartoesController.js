@@ -95,7 +95,7 @@ const cartoesController = {
     try {
       await client.query('BEGIN');
       const { cartao_id, descricao, valor_total, data_compra, parcelas, categoria_id, origem } = req.body;
-      const qtdeParcelas = parseInt(parcelas) || 1;
+      const qtdeParcelas = Math.max(1, parseInt(parcelas, 10) || 1);
       const valorParcela = parseFloat(valor_total) / qtdeParcelas;
 
       // Buscar o cartão
@@ -146,6 +146,82 @@ const cartoesController = {
       await client.query('ROLLBACK');
       console.error(e);
       res.status(400).json({ error: e.message || 'Erro ao registrar compra no cartão.' });
+    } finally {
+      client.release();
+    }
+  },
+
+  async listarComprasFatura(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await pool.query(`
+        SELECT cp.*, c.nome as categoria_nome
+        FROM contas_pagar cp
+        LEFT JOIN categorias c ON cp.categoria_id = c.id
+        WHERE cp.fatura_id = $1 AND cp.usuario_id = $2
+        ORDER BY cp.data_vencimento ASC, cp.id ASC
+      `, [id, req.userId]);
+      res.json({ compras: result.rows });
+    } catch (e) {
+      console.error(e); res.status(500).json({ error: 'Erro interno.' });
+    }
+  },
+
+  async editarCompra(req, res) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { id } = req.params;
+      const { descricao, valor, categoria_id } = req.body;
+      const novoValor = parseFloat(valor);
+
+      const contaRes = await client.query('SELECT valor, fatura_id FROM contas_pagar WHERE id = $1 AND usuario_id = $2', [id, req.userId]);
+      if (!contaRes.rows.length) throw new Error('Compra não encontrada.');
+      const conta = contaRes.rows[0];
+
+      const diferenca = novoValor - parseFloat(conta.valor);
+
+      const updConta = await client.query(`
+        UPDATE contas_pagar 
+        SET descricao = $1, valor = $2, categoria_id = $3, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $4 AND usuario_id = $5 RETURNING *
+      `, [descricao, novoValor, categoria_id || null, id, req.userId]);
+
+      if (diferenca !== 0 && conta.fatura_id) {
+        await client.query('UPDATE faturas SET valor_total = valor_total + $1 WHERE id = $2', [diferenca, conta.fatura_id]);
+      }
+
+      await client.query('COMMIT');
+      res.json({ message: 'Compra atualizada!', compra: updConta.rows[0] });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      console.error(e); res.status(400).json({ error: e.message || 'Erro ao atualizar compra.' });
+    } finally {
+      client.release();
+    }
+  },
+
+  async excluirCompra(req, res) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { id } = req.params;
+
+      const contaRes = await client.query('SELECT valor, fatura_id FROM contas_pagar WHERE id = $1 AND usuario_id = $2', [id, req.userId]);
+      if (!contaRes.rows.length) throw new Error('Compra não encontrada.');
+      const conta = contaRes.rows[0];
+
+      await client.query('DELETE FROM contas_pagar WHERE id = $1', [id]);
+
+      if (conta.fatura_id) {
+        await client.query('UPDATE faturas SET valor_total = valor_total - $1 WHERE id = $2', [conta.valor, conta.fatura_id]);
+      }
+
+      await client.query('COMMIT');
+      res.json({ message: 'Compra excluída com sucesso!' });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      console.error(e); res.status(400).json({ error: e.message || 'Erro ao excluir compra.' });
     } finally {
       client.release();
     }

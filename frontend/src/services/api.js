@@ -81,7 +81,10 @@ const api = {
   criarCartao: (dados) => request('POST', '/cartoes', dados),
   excluirCartao: (id) => request('DELETE', `/cartoes/${id}`),
   listarFaturas: (cartaoId = '') => request('GET', `/cartoes/faturas${cartaoId ? '?cartao_id=' + cartaoId : ''}`),
+  listarComprasFatura: (id) => request('GET', `/cartoes/faturas/${id}/compras`),
   adicionarCompra: (dados) => request('POST', '/cartoes/compras', dados),
+  editarCompraCartao: (id, dados) => request('PUT', `/cartoes/compras/${id}`, dados),
+  excluirCompraCartao: (id) => request('DELETE', `/cartoes/compras/${id}`),
 
   // Recorrências
   listarRecorrencias: (tipo = '') => request('GET', `/recorrencias${tipo ? '?tipo=' + tipo : ''}`),

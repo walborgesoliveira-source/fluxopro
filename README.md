@@ -96,10 +96,10 @@ O sistema fica disponível em `http://localhost:3080`.
 
 - [x] Fase 1 — Autenticação + CRUD Pagar/Receber
 - [x] Fase 2 — Módulo de Caixa PF/PJ
-- [ ] Fase 3 — Cartão de Crédito + Faturas
-- [ ] Fase 4 — Recorrência Inteligente
-- [ ] Fase 5 — Dashboard com Gráficos
-- [ ] Fase 6 — Comparativo Mensal
+- [x] Fase 3 — Cartão de Crédito + Faturas
+- [x] Fase 4 — Recorrência Inteligente
+- [x] Fase 5 — Dashboard com Gráficos
+- [x] Fase 6 — Comparativo Mensal
 - [x] Fase 7 — Docker + Nginx
 
 ---
