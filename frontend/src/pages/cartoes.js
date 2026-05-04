@@ -44,116 +44,122 @@ export async function renderCartoes(container) {
     </div>
 
     <!-- MODAL: Novo Cartão -->
-    <div class="modal" id="modalNovoCartao">
-      <div class="modal-content" style="max-width: 500px">
-        <div class="modal-header">
-          <h2 class="modal-title">Novo Cartão</h2>
-          <button class="modal-close" id="fecharNovoCartao">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form id="formNovoCartao">
-            <div class="form-group">
-              <label class="form-label">Nome do Cartão (Apelido)</label>
-              <input type="text" id="cartaoNome" class="form-control" required placeholder="Ex: Nubank, Itaú">
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+    <div class="modal-overlay" id="overlayNovoCartao" style="display: none;">
+      <div class="modal">
+        <div class="modal-content" style="max-width: 500px">
+          <div class="modal-header">
+            <h2 class="modal-title">Novo Cartão</h2>
+            <button class="modal-close" id="fecharNovoCartao">&times;</button>
+          </div>
+          <div class="modal-body">
+            <form id="formNovoCartao">
               <div class="form-group">
-                <label class="form-label">Bandeira</label>
-                <select id="cartaoBandeira" class="form-control">
-                  <option value="Mastercard">Mastercard</option>
-                  <option value="Visa">Visa</option>
-                  <option value="Elo">Elo</option>
-                  <option value="American Express">American Express</option>
-                  <option value="Outra">Outra</option>
-                </select>
+                <label class="form-label">Nome do Cartão (Apelido)</label>
+                <input type="text" id="cartaoNome" class="form-control" required placeholder="Ex: Nubank, Itaú">
               </div>
-              <div class="form-group">
-                <label class="form-label">Limite Total (R$)</label>
-                <input type="number" id="cartaoLimite" class="form-control" step="0.01" min="0">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                  <label class="form-label">Bandeira</label>
+                  <select id="cartaoBandeira" class="form-control">
+                    <option value="Mastercard">Mastercard</option>
+                    <option value="Visa">Visa</option>
+                    <option value="Elo">Elo</option>
+                    <option value="American Express">American Express</option>
+                    <option value="Outra">Outra</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Limite Total (R$)</label>
+                  <input type="number" id="cartaoLimite" class="form-control" step="0.01" min="0">
+                </div>
               </div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-              <div class="form-group">
-                <label class="form-label">Dia de Fechamento</label>
-                <input type="number" id="cartaoFechamento" class="form-control" min="1" max="31" required>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                  <label class="form-label">Dia de Fechamento</label>
+                  <input type="number" id="cartaoFechamento" class="form-control" min="1" max="31" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Dia de Vencimento</label>
+                  <input type="number" id="cartaoVencimento" class="form-control" min="1" max="31" required>
+                </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Dia de Vencimento</label>
-                <input type="number" id="cartaoVencimento" class="form-control" min="1" max="31" required>
-              </div>
-            </div>
-            <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem;">Salvar Cartão</button>
-          </form>
+              <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem;">Salvar Cartão</button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- MODAL: Lançar Compra -->
-    <div class="modal" id="modalLancarCompra">
-      <div class="modal-content" style="max-width: 500px">
-        <div class="modal-header">
-          <h2 class="modal-title">Lançar Compra no Cartão</h2>
-          <button class="modal-close" id="fecharLancarCompra">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form id="formLancarCompra">
-            <div class="form-group">
-              <label class="form-label">Cartão</label>
-              <select id="compraCartao" class="form-control" required></select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Descrição da Compra</label>
-              <input type="text" id="compraDescricao" class="form-control" required>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+    <div class="modal-overlay" id="overlayLancarCompra" style="display: none;">
+      <div class="modal">
+        <div class="modal-content" style="max-width: 500px">
+          <div class="modal-header">
+            <h2 class="modal-title">Lançar Compra no Cartão</h2>
+            <button class="modal-close" id="fecharLancarCompra">&times;</button>
+          </div>
+          <div class="modal-body">
+            <form id="formLancarCompra">
               <div class="form-group">
-                <label class="form-label">Valor Total (R$)</label>
-                <input type="number" id="compraValor" class="form-control" step="0.01" min="0.01" required>
+                <label class="form-label">Cartão</label>
+                <select id="compraCartao" class="form-control" required></select>
               </div>
               <div class="form-group">
-                <label class="form-label">Nº Parcelas</label>
-                <input type="number" id="compraParcelas" class="form-control" value="1" min="1" required>
+                <label class="form-label">Descrição da Compra</label>
+                <input type="text" id="compraDescricao" class="form-control" required>
               </div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-              <div class="form-group">
-                <label class="form-label">Data da Compra</label>
-                <input type="date" id="compraData" class="form-control" required>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                  <label class="form-label">Valor Total (R$)</label>
+                  <input type="number" id="compraValor" class="form-control" step="0.01" min="0.01" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Nº Parcelas</label>
+                  <input type="number" id="compraParcelas" class="form-control" value="1" min="1" required>
+                </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Categoria</label>
-                <select id="compraCategoria" class="form-control" required></select>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                  <label class="form-label">Data da Compra</label>
+                  <input type="date" id="compraData" class="form-control" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Categoria</label>
+                  <select id="compraCategoria" class="form-control" required></select>
+                </div>
               </div>
-            </div>
-            <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem;">Registrar Compra</button>
-          </form>
+              <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem;">Registrar Compra</button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- MODAL: Detalhes da Fatura -->
-    <div class="modal" id="modalFatura">
-      <div class="modal-content" style="max-width: 800px">
-        <div class="modal-header">
-          <h2 class="modal-title">Detalhes da Fatura</h2>
-          <button class="modal-close" id="fecharFatura">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="table-container">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Data Venc.</th>
-                  <th>Descrição</th>
-                  <th>Categoria</th>
-                  <th>Valor</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="comprasFaturaBody">
-                <!-- Preenchido via JS -->
-              </tbody>
-            </table>
+    <div class="modal-overlay" id="overlayFatura" style="display: none;">
+      <div class="modal">
+        <div class="modal-content" style="max-width: 800px">
+          <div class="modal-header">
+            <h2 class="modal-title">Detalhes da Fatura</h2>
+            <button class="modal-close" id="fecharFatura">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Data Venc.</th>
+                    <th>Descrição</th>
+                    <th>Categoria</th>
+                    <th>Valor</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="comprasFaturaBody">
+                  <!-- Preenchido via JS -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -166,21 +172,21 @@ export async function renderCartoes(container) {
   const filtroCartaoFatura = document.getElementById('filtroCartaoFatura');
   
   // Modais
-  const modalNovoCartao = document.getElementById('modalNovoCartao');
+  const overlayNovoCartao = document.getElementById('overlayNovoCartao');
   const formNovoCartao = document.getElementById('formNovoCartao');
-  document.getElementById('btnNovoCartao').addEventListener('click', () => modalNovoCartao.classList.add('active'));
-  document.getElementById('fecharNovoCartao').addEventListener('click', () => modalNovoCartao.classList.remove('active'));
+  document.getElementById('btnNovoCartao').addEventListener('click', () => overlayNovoCartao.style.display = 'flex');
+  document.getElementById('fecharNovoCartao').addEventListener('click', () => overlayNovoCartao.style.display = 'none');
 
-  const modalLancarCompra = document.getElementById('modalLancarCompra');
+  const overlayLancarCompra = document.getElementById('overlayLancarCompra');
   const formLancarCompra = document.getElementById('formLancarCompra');
   document.getElementById('btnLancarCompra').addEventListener('click', () => {
     document.getElementById('compraData').valueAsDate = new Date();
-    modalLancarCompra.classList.add('active');
+    overlayLancarCompra.style.display = 'flex';
   });
-  document.getElementById('fecharLancarCompra').addEventListener('click', () => modalLancarCompra.classList.remove('active'));
+  document.getElementById('fecharLancarCompra').addEventListener('click', () => overlayLancarCompra.style.display = 'none');
 
-  const modalFatura = document.getElementById('modalFatura');
-  document.getElementById('fecharFatura').addEventListener('click', () => modalFatura.classList.remove('active'));
+  const overlayFatura = document.getElementById('overlayFatura');
+  document.getElementById('fecharFatura').addEventListener('click', () => overlayFatura.style.display = 'none');
 
   // Estado
   let cartoes = [];
@@ -319,9 +325,9 @@ export async function renderCartoes(container) {
       console.log('Lançamentos encontrados:', res);
       if(!res.compras) throw new Error('compras não definido no retorno da API');
       renderComprasFatura(res.compras);
-      const modalF = document.getElementById('modalFatura');
-      if(modalF) {
-        modalF.classList.add('active');
+      const overlayF = document.getElementById('overlayFatura');
+      if(overlayF) {
+        overlayF.style.display = 'flex';
         console.log('Modal ativado');
       } else {
         alert('Erro: Modal não encontrado no HTML!');
@@ -400,7 +406,7 @@ export async function renderCartoes(container) {
     try {
       await api.criarCartao(dados);
       toast('Cartão salvo!');
-      modalNovoCartao.classList.remove('active');
+      document.getElementById('overlayNovoCartao').style.display = 'none';
       formNovoCartao.reset();
       loadData();
     } catch (err) {
@@ -424,7 +430,7 @@ export async function renderCartoes(container) {
     try {
       await api.adicionarCompra(dados);
       toast('Compra lançada com sucesso!');
-      modalLancarCompra.classList.remove('active');
+      document.getElementById('overlayLancarCompra').style.display = 'none';
       formLancarCompra.reset();
       loadData();
     } catch (err) {
