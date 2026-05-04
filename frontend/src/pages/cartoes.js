@@ -322,10 +322,23 @@ export async function renderCartoes(container) {
               ${f.status}
             </span>
             <button class="btn btn-sm btn-secondary btn-ver-fatura" onclick="window.abrirFaturaDetalhes('${f.id}')" style="margin-left: 0.5rem; position: relative; z-index: 9999; cursor: pointer;">Ver Lançamentos</button>
+            <button class="btn btn-sm btn-danger btn-excluir-fatura" data-id="${f.id}" style="margin-left: 0.25rem; position: relative; z-index: 9999; cursor: pointer;" title="Excluir Fatura (ideal para limpar faturas zeradas)">✕</button>
           </td>
         </tr>
       `;
     }).join('');
+
+    document.querySelectorAll('.btn-excluir-fatura').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        if (confirm('Deseja realmente excluir esta fatura? (Lançamentos vinculados, se houver, não serão apagados, apenas desvinculados)')) {
+          try {
+            await api.excluirFatura(e.currentTarget.dataset.id);
+            toast('Fatura excluída com sucesso!', 'success');
+            loadData();
+          } catch(err) { toast(err.message, 'error'); }
+        }
+      });
+    });
   }
 
   let faturaAtualId = null;

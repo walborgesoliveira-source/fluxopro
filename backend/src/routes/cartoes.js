@@ -9,6 +9,7 @@ router.delete('/:id', cartoesController.excluirCartao);
 
 // Rotas de faturas e compras
 router.get('/faturas', cartoesController.listarFaturas);
+router.delete('/faturas/:id', cartoesController.excluirFatura);
 router.post('/compras', cartoesController.adicionarCompra);
 router.get('/faturas/:id/compras', cartoesController.listarComprasFatura);
 router.put('/compras/:id', cartoesController.editarCompra);

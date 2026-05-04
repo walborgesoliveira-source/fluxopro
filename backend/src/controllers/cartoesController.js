@@ -225,6 +225,28 @@ const cartoesController = {
     } finally {
       client.release();
     }
+  },
+
+  /**
+   * DELETE /api/cartoes/faturas/:id
+   */
+  async excluirFatura(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await pool.query(
+        'DELETE FROM faturas WHERE id = $1 AND usuario_id = $2 RETURNING id',
+        [id, req.userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Fatura não encontrada.' });
+      }
+
+      res.json({ message: 'Fatura excluída com sucesso!' });
+    } catch (error) {
+      console.error('Erro ao excluir fatura:', error);
+      res.status(500).json({ error: 'Erro interno.' });
+    }
   }
 };
 
