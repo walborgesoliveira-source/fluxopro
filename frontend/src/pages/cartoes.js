@@ -302,27 +302,33 @@ export async function renderCartoes(container) {
             <span class="status-badge" style="background: ${badgeColor}20; color: ${badgeColor}; padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600;">
               ${f.status}
             </span>
-            <button class="btn btn-sm btn-secondary btn-ver-fatura" data-id="${f.id}" style="margin-left: 0.5rem">Ver Lançamentos</button>
+            <button class="btn btn-sm btn-secondary btn-ver-fatura" onclick="window.abrirFaturaDetalhes('${f.id}')" style="margin-left: 0.5rem; position: relative; z-index: 9999; cursor: pointer;">Ver Lançamentos</button>
           </td>
         </tr>
       `;
     }).join('');
-
-    document.querySelectorAll('.btn-ver-fatura').forEach(btn => {
-      btn.addEventListener('click', () => abrirFaturaDetalhes(btn.dataset.id));
-    });
   }
 
   let faturaAtualId = null;
 
-  async function abrirFaturaDetalhes(id) {
+  window.abrirFaturaDetalhes = async function(id) {
+    console.log('Botão clicado! ID da fatura:', id);
     faturaAtualId = id;
     try {
       const res = await api.listarComprasFatura(id);
+      console.log('Lançamentos encontrados:', res);
+      if(!res.compras) throw new Error('compras não definido no retorno da API');
       renderComprasFatura(res.compras);
-      modalFatura.classList.add('active');
+      const modalF = document.getElementById('modalFatura');
+      if(modalF) {
+        modalF.classList.add('active');
+        console.log('Modal ativado');
+      } else {
+        alert('Erro: Modal não encontrado no HTML!');
+      }
     } catch (e) {
-      toast('Erro ao carregar compras.', 'error');
+      console.error('Erro no abrirFaturaDetalhes:', e);
+      toast('Erro ao carregar compras: ' + e.message, 'error');
     }
   }
 
