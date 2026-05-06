@@ -50,6 +50,22 @@ async function runMigrations() {
   try {
     await pool.query(`ALTER TABLE cartoes ADD COLUMN IF NOT EXISTS melhor_dia_compra INTEGER CHECK (melhor_dia_compra BETWEEN 1 AND 31)`);
     console.log('✅ Migration: coluna melhor_dia_compra verificada.');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS recorrencias_status (
+        id SERIAL PRIMARY KEY,
+        recorrencia_id INTEGER REFERENCES recorrencias(id) ON DELETE CASCADE,
+        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+        mes INTEGER NOT NULL CHECK (mes BETWEEN 1 AND 12),
+        ano INTEGER NOT NULL,
+        status VARCHAR(10) DEFAULT 'PENDENTE' CHECK (status IN ('PENDENTE', 'PAGO')),
+        forma_pagamento VARCHAR(30) DEFAULT NULL,
+        data_pagamento DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(recorrencia_id, mes, ano)
+      )
+    `);
+    console.log('✅ Migration: tabela recorrencias_status verificada.');
   } catch (e) {
     console.error('⚠️ Erro na migration:', e.message);
   }

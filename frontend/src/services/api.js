@@ -90,10 +90,14 @@ const api = {
 
   // Recorrências
   listarRecorrencias: (tipo = '') => request('GET', `/recorrencias${tipo ? '?tipo=' + tipo : ''}`),
+  listarRecorrenciasStatus: (mes, ano, tipo = '') => request('GET', `/recorrencias/status?mes=${mes}&ano=${ano}${tipo ? '&tipo=' + tipo : ''}`),
+  totaisRecorrencias: (mes, ano) => request('GET', `/recorrencias/totais?mes=${mes}&ano=${ano}`),
   criarRecorrencia: (dados) => request('POST', '/recorrencias', dados),
   atualizarRecorrencia: (id, dados) => request('PUT', `/recorrencias/${id}`, dados),
   excluirRecorrencia: (id) => request('DELETE', `/recorrencias/${id}`),
   gerarRecorrenciasMensal: (mes, ano) => request('POST', '/recorrencias/gerar', { mes, ano }),
+  marcarRecorrenciaPaga: (id, dados) => request('POST', `/recorrencias/${id}/pagar`, dados),
+  marcarRecorrenciaPendente: (id, dados) => request('POST', `/recorrencias/${id}/despagar`, dados),
 
   // Relatórios
   relatorioComparativo: () => request('GET', '/relatorios/comparativo'),
