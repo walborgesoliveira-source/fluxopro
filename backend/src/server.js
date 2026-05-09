@@ -52,6 +52,37 @@ async function runMigrations() {
     console.log('✅ Migration: coluna melhor_dia_compra verificada.');
 
     await pool.query(`
+      ALTER TABLE contas_pagar DROP CONSTRAINT IF EXISTS contas_pagar_forma_pagamento_check;
+      ALTER TABLE contas_pagar ALTER COLUMN forma_pagamento TYPE VARCHAR(30);
+      ALTER TABLE movimentacoes ADD COLUMN IF NOT EXISTS conta_bancaria_id INTEGER;
+      ALTER TABLE movimentacoes ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(30);
+      ALTER TABLE contas_receber ADD COLUMN IF NOT EXISTS conta_bancaria_id INTEGER;
+      ALTER TABLE faturas ADD COLUMN IF NOT EXISTS valor_pago DECIMAL(12,2) DEFAULT 0;
+    `);
+    console.log('✅ Migration: meios de pagamento e valor pago de fatura verificados.');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS contas_bancarias (
+        id SERIAL PRIMARY KEY,
+        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+        nome VARCHAR(80) NOT NULL,
+        saldo_inicial DECIMAL(12,2) DEFAULT 0,
+        ativo BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(usuario_id, nome)
+      )
+    `);
+
+    await pool.query(`
+      INSERT INTO contas_bancarias (usuario_id, nome, saldo_inicial)
+      SELECT u.id, banco.nome, 0
+      FROM usuarios u
+      CROSS JOIN (VALUES ('Bradesco'), ('Santander'), ('Crefisa')) AS banco(nome)
+      ON CONFLICT (usuario_id, nome) DO NOTHING
+    `);
+    console.log('✅ Migration: contas correntes padrão verificadas.');
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS recorrencias_status (
         id SERIAL PRIMARY KEY,
         recorrencia_id INTEGER REFERENCES recorrencias(id) ON DELETE CASCADE,

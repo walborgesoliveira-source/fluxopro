@@ -1,5 +1,5 @@
 import { api } from '../services/api.js';
-import { formatCurrency, formatDate } from '../services/utils.js';
+import { formatCurrency, formatDate, getMesNome } from '../services/utils.js';
 import { toast } from '../components/toast.js';
 
 export async function renderCartoes(container) {
@@ -11,7 +11,6 @@ export async function renderCartoes(container) {
       </div>
       <div style="display:flex;gap:1rem;">
         <button class="btn btn-secondary" id="btnNovoCartao">+ Novo Cartão</button>
-        <button class="btn btn-primary" id="btnLancarCompra">+ Lançar Compra</button>
       </div>
     </div>
 
@@ -20,23 +19,25 @@ export async function renderCartoes(container) {
       <!-- Preenchido via JS -->
     </div>
 
-    <!-- Lista de Faturas -->
+    <!-- Saldo dos Cartões -->
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
-        <h3 class="card-title">Faturas</h3>
+        <h3 class="card-title">Saldo do Cartão</h3>
         <select id="filtroCartaoFatura" class="form-control" style="width: auto;"></select>
       </div>
       <div class="table-container">
         <table class="table">
           <thead>
             <tr>
-              <th>Mês/Ano</th>
               <th>Cartão</th>
-              <th>Valor Total</th>
-              <th>Status</th>
+              <th>Limite Total</th>
+              <th>Total Lançado</th>
+              <th>Valor Pago</th>
+              <th>Saldo Atual</th>
+              <th>Ações</th>
             </tr>
           </thead>
-          <tbody id="faturasTableBody">
+          <tbody id="saldoCartoesTableBody">
             <!-- Preenchido via JS -->
           </tbody>
         </table>
@@ -223,7 +224,7 @@ export async function renderCartoes(container) {
 
   // Referências
   const cartoesContainer = document.getElementById('cartoesContainer');
-  const faturasTableBody = document.getElementById('faturasTableBody');
+  const saldoCartoesTableBody = document.getElementById('saldoCartoesTableBody');
   const filtroCartaoFatura = document.getElementById('filtroCartaoFatura');
   
   // Modais
@@ -234,10 +235,6 @@ export async function renderCartoes(container) {
 
   const overlayLancarCompra = document.getElementById('overlayLancarCompra');
   const formLancarCompra = document.getElementById('formLancarCompra');
-  document.getElementById('btnLancarCompra').addEventListener('click', () => {
-    document.getElementById('compraData').valueAsDate = new Date();
-    overlayLancarCompra.style.display = 'flex';
-  });
   document.getElementById('fecharLancarCompra').addEventListener('click', () => overlayLancarCompra.style.display = 'none');
 
   const overlayFatura = document.getElementById('overlayFatura');
@@ -260,6 +257,12 @@ export async function renderCartoes(container) {
     document.getElementById('editCartaoMelhorDia').value = cartao.melhor_dia_compra || '';
     overlayEditarCartao.style.display = 'flex';
   };
+
+  function abrirLancarCompra(cartaoId = '') {
+    document.getElementById('compraData').valueAsDate = new Date();
+    document.getElementById('compraCartao').value = cartaoId || document.getElementById('compraCartao').value;
+    overlayLancarCompra.style.display = 'flex';
+  }
 
   document.getElementById('formEditarCartao').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -292,32 +295,32 @@ export async function renderCartoes(container) {
   // Estado
   let cartoes = [];
   let categorias = [];
+  let faturas = [];
+  let contasCorrentes = [];
 
   // Carregar dados
   async function loadData() {
     try {
-      const [resCartoes, resFaturas, resCat] = await Promise.all([
+      const [resCartoes, resFaturas, resCat, resContasCorrentes] = await Promise.all([
         api.listarCartoes(),
-        api.listarFaturas(filtroCartaoFatura.value),
-        api.listarCategorias('DESPESA')
+        api.listarFaturas(),
+        api.listarCategorias('DESPESA'),
+        api.contasCorrentes()
       ]);
 
       cartoes = resCartoes.cartoes;
+      faturas = resFaturas.faturas || [];
       categorias = resCat.categorias;
+      contasCorrentes = resContasCorrentes.contas || [];
       renderCartoesList(cartoes);
-      renderFaturas(resFaturas.faturas);
       populateSelects();
+      renderSaldoCartoes();
     } catch (e) {
       toast('Erro ao carregar dados dos cartões.', 'error');
     }
   }
 
-  filtroCartaoFatura.addEventListener('change', async () => {
-    try {
-      const res = await api.listarFaturas(filtroCartaoFatura.value);
-      renderFaturas(res.faturas);
-    } catch (e) {}
-  });
+  filtroCartaoFatura.addEventListener('change', renderSaldoCartoes);
 
   function populateSelects() {
     const compraCartao = document.getElementById('compraCartao');
@@ -325,7 +328,9 @@ export async function renderCartoes(container) {
     const comboCat = document.getElementById('compraCategoria');
 
     // Cartoes no Lancar Compra
-    compraCartao.innerHTML = cartoes.map(c => `<option value="${c.id}">${c.nome} (Venc: dia ${c.dia_vencimento})</option>`).join('');
+    if (compraCartao) {
+      compraCartao.innerHTML = cartoes.map(c => `<option value="${c.id}">${c.nome} (Venc: dia ${c.dia_vencimento})</option>`).join('');
+    }
     
     // Cartoes no Filtro de faturas
     const currentFiltro = comboFiltro.value;
@@ -333,7 +338,23 @@ export async function renderCartoes(container) {
     comboFiltro.value = currentFiltro; // mantem selecao
 
     // Categorias
-    comboCat.innerHTML = categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+    if (comboCat) {
+      comboCat.innerHTML = categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+    }
+  }
+
+  function dataVencimentoFatura(ano, mes, diaVencimento) {
+    if (!diaVencimento) return '-';
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    const dia = Math.min(parseInt(diaVencimento, 10), ultimoDia);
+    return formatDate(`${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`);
+  }
+
+  function contaCorrenteOptions() {
+    return contasCorrentes
+      .filter((conta) => ['Bradesco', 'Santander', 'Crefisa'].includes(conta.nome))
+      .map((conta) => `<option value="${conta.id}">${conta.nome}</option>`)
+      .join('');
   }
 
   function renderCartoesList(lista) {
@@ -343,6 +364,19 @@ export async function renderCartoes(container) {
     }
 
     cartoesContainer.innerHTML = lista.map(c => {
+      const hoje = new Date();
+      const mesAtual = hoje.getMonth() + 1;
+      const anoAtual = hoje.getFullYear();
+      const faturaMes = faturas.find(f => Number(f.cartao_id) === Number(c.id) && Number(f.mes_referencia) === mesAtual && Number(f.ano_referencia) === anoAtual);
+      const valorFaturaMes = parseFloat(faturaMes?.valor_total || 0);
+      const valorPagoMes = parseFloat(faturaMes?.valor_pago || 0);
+      const saldoAtualMes = Math.max(0, valorFaturaMes - valorPagoMes);
+      const totalAbertoCartao = faturas
+        .filter(f => Number(f.cartao_id) === Number(c.id))
+        .reduce((total, f) => total + Math.max(0, parseFloat(f.valor_total || 0) - parseFloat(f.valor_pago || 0)), 0);
+      const saldoDisponivelCartao = Math.max(0, parseFloat(c.limite || 0) - totalAbertoCartao);
+      const vencimentoMes = dataVencimentoFatura(anoAtual, mesAtual, c.dia_vencimento);
+
       // Cores simuladas pela bandeira
       let bg = 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)';
       if (c.bandeira === 'Mastercard') bg = 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)';
@@ -359,14 +393,37 @@ export async function renderCartoes(container) {
         </div>
         
         <div style="margin-bottom: 1.5rem;">
-          <div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 0.25rem;">Limite Total</div>
-          <div style="font-size: 1.5rem; font-weight: 700;">${formatCurrency(c.limite)}</div>
+          <div style="font-size: 0.78rem; opacity: 0.78; margin-bottom: 0.2rem;">Limite Total</div>
+          <div style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.9rem;">${formatCurrency(c.limite)}</div>
+          <div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 0.25rem;">Saldo do Cartão</div>
+          <div style="font-size: 1.5rem; font-weight: 700;">${formatCurrency(saldoDisponivelCartao)}</div>
+          <div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 0.25rem;">Valor da Fatura do Mês - ${getMesNome(mesAtual)} ${anoAtual}</div>
+          <div style="font-size: 1.05rem; font-weight: 700;">${formatCurrency(valorFaturaMes)}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.85rem;font-size:0.82rem;">
+            <div>
+              <div style="opacity:0.72;">Valor pago</div>
+              <strong>${formatCurrency(valorPagoMes)}</strong>
+            </div>
+            <div>
+              <div style="opacity:0.72;">Vencimento</div>
+              <strong>${vencimentoMes}</strong>
+            </div>
+            <div style="grid-column:1/-1;">
+              <div style="opacity:0.72;">Saldo atual</div>
+              <strong>${formatCurrency(saldoAtualMes)}</strong>
+            </div>
+          </div>
         </div>
         
         <div style="display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.9; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 1rem; flex-wrap: wrap; gap: 0.5rem;">
           <div>Fechamento: Dia ${c.dia_fechamento}</div>
           <div>Vencimento: Dia ${c.dia_vencimento}</div>
           ${c.melhor_dia_compra ? `<div style="width:100%; margin-top:0.25rem;">🛒 Melhor dia de compra: <strong>Dia ${c.melhor_dia_compra}</strong></div>` : ''}
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:1rem;position:relative;z-index:2">
+          <button class="btn btn-sm btn-secondary btn-informar-fatura-card" data-id="${c.id}" style="background:rgba(255,255,255,0.16);border-color:rgba(255,255,255,0.2);color:white;">Informar Fatura</button>
+          <button class="btn btn-sm btn-success btn-pagar-fatura-card" data-id="${c.id}" ${faturaMes ? '' : 'disabled'} style="opacity:${faturaMes ? '1' : '0.55'};">Informar Pagamento</button>
         </div>
         
         <button class="btn-edit-cartao" data-id="${c.id}" style="position: absolute; top: 1rem; right: 2.5rem; background: rgba(0,0,0,0.2); border: none; color: white; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Editar Cartão">✎</button>
@@ -395,46 +452,220 @@ export async function renderCartoes(container) {
         }
       });
     });
+
+    document.querySelectorAll('.btn-informar-fatura-card').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const cartao = cartoes.find(c => String(c.id) === String(e.currentTarget.dataset.id));
+        if (cartao) showFaturaMesModal(cartao);
+      });
+    });
+
+    document.querySelectorAll('.btn-pagar-fatura-card').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const cartaoId = e.currentTarget.dataset.id;
+        const hoje = new Date();
+        const fatura = faturas.find(f => Number(f.cartao_id) === Number(cartaoId) && Number(f.mes_referencia) === hoje.getMonth() + 1 && Number(f.ano_referencia) === hoje.getFullYear());
+        if (fatura) showPagamentoFaturaModal(fatura);
+      });
+    });
   }
 
-  function renderFaturas(faturas) {
-    if (faturas.length === 0) {
-      faturasTableBody.innerHTML = '<tr><td colspan="4" class="text-center">Nenhuma fatura encontrada.</td></tr>';
+  function renderSaldoCartoes() {
+    const filtro = filtroCartaoFatura.value;
+    const lista = filtro ? cartoes.filter(c => String(c.id) === String(filtro)) : cartoes;
+
+    if (lista.length === 0) {
+      saldoCartoesTableBody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum cartão encontrado.</td></tr>';
       return;
     }
 
-    faturasTableBody.innerHTML = faturas.map(f => {
-      let badgeColor = 'var(--text-secondary)';
-      if (f.status === 'ABERTA') badgeColor = 'var(--primary-color)';
-      if (f.status === 'FECHADA') badgeColor = 'var(--warning-color)';
-      if (f.status === 'PAGA') badgeColor = 'var(--success-color)';
+    saldoCartoesTableBody.innerHTML = lista.map(cartao => {
+      const faturasCartao = faturas.filter(f => Number(f.cartao_id) === Number(cartao.id));
+      const limite = parseFloat(cartao.limite || 0);
+      const totalLancado = faturasCartao.reduce((total, f) => total + parseFloat(f.valor_total || 0), 0);
+      const valorPago = faturasCartao.reduce((total, f) => total + parseFloat(f.valor_pago || 0), 0);
+      const saldoAtual = Math.max(0, limite - Math.max(0, totalLancado - valorPago));
 
       return `
         <tr>
-          <td style="font-weight:600">${String(f.mes_referencia).padStart(2, '0')}/${f.ano_referencia}</td>
-          <td>${f.cartao_nome}</td>
-          <td style="font-weight:700">${formatCurrency(f.valor_total)}</td>
+          <td style="font-weight:600">${cartao.nome}</td>
+          <td style="font-weight:700">${formatCurrency(limite)}</td>
+          <td style="font-weight:700;color:var(--warning)">${formatCurrency(totalLancado)}</td>
+          <td style="font-weight:700;color:var(--success)">${formatCurrency(valorPago)}</td>
+          <td style="font-weight:700;color:${saldoAtual > 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(saldoAtual)}</td>
           <td>
-            <span class="status-badge" style="background: ${badgeColor}20; color: ${badgeColor}; padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600;">
-              ${f.status}
-            </span>
-            <button class="btn btn-sm btn-secondary btn-ver-fatura" onclick="window.abrirFaturaDetalhes('${f.id}')" style="margin-left: 0.5rem; position: relative; z-index: 9999; cursor: pointer;">Ver Lançamentos</button>
-            <button class="btn btn-sm btn-danger btn-excluir-fatura" data-id="${f.id}" style="margin-left: 0.25rem; position: relative; z-index: 9999; cursor: pointer;" title="Excluir Fatura (ideal para limpar faturas zeradas)">✕</button>
+            <button class="btn btn-sm btn-primary btn-informar-fatura" data-id="${cartao.id}">Informar Fatura do Mês</button>
           </td>
         </tr>
       `;
     }).join('');
 
-    document.querySelectorAll('.btn-excluir-fatura').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        if (confirm('Deseja realmente excluir esta fatura? (Lançamentos vinculados, se houver, não serão apagados, apenas desvinculados)')) {
-          try {
-            await api.excluirFatura(e.currentTarget.dataset.id);
-            toast('Fatura excluída com sucesso!', 'success');
-            loadData();
-          } catch(err) { toast(err.message, 'error'); }
-        }
+    document.querySelectorAll('.btn-informar-fatura').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cartao = cartoes.find(c => String(c.id) === String(btn.dataset.id));
+        if (cartao) showFaturaMesModal(cartao);
       });
+    });
+  }
+
+  function showFaturaMesModal(cartao) {
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth() + 1;
+    const anoAtual = hoje.getFullYear();
+    const faturaAtual = faturas.find(f => Number(f.cartao_id) === Number(cartao.id) && Number(f.mes_referencia) === mesAtual && Number(f.ano_referencia) === anoAtual);
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+      <div class="modal">
+        <div class="modal-content" style="max-width: 460px">
+          <div class="modal-header">
+            <h2 class="modal-title">Informar Fatura do Mês</h2>
+            <button class="modal-close" id="fecharFaturaMes">&times;</button>
+          </div>
+          <form id="formFaturaMes">
+            <div class="modal-body">
+              <div style="margin-bottom:1rem">
+                <div style="font-size:0.8rem;color:var(--text-muted)">Cartão</div>
+                <strong>${cartao.nome}</strong>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="form-group">
+                  <label class="form-label">Mês</label>
+                  <select id="faturaMes" class="form-control" required>
+                    ${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === mesAtual ? 'selected' : ''}>${getMesNome(i + 1)}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Ano</label>
+                  <input type="number" id="faturaAno" class="form-control" value="${anoAtual}" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Valor da fatura do mês (R$)</label>
+                <input type="number" id="faturaValorTotal" class="form-control" step="0.01" min="0" value="${faturaAtual?.valor_total || ''}" required>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" id="cancelarFaturaMes">Cancelar</button>
+              <button type="submit" class="btn btn-primary">Salvar Fatura</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    document.getElementById('fecharFaturaMes').addEventListener('click', close);
+    document.getElementById('cancelarFaturaMes').addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    document.getElementById('formFaturaMes').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api.salvarFaturaMes(cartao.id, {
+          mes: parseInt(document.getElementById('faturaMes').value, 10),
+          ano: parseInt(document.getElementById('faturaAno').value, 10),
+          valor_total: parseFloat(document.getElementById('faturaValorTotal').value),
+        });
+        toast('Fatura do mês salva!', 'success');
+        close();
+        loadData();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+  }
+
+  function dateInputValue(dateValue) {
+    if (!dateValue) return new Date().toISOString().split('T')[0];
+    return String(dateValue).slice(0, 10);
+  }
+
+  function showPagamentoFaturaModal(fatura) {
+    const valorTotal = parseFloat(fatura.valor_total || 0);
+    const valorPago = parseFloat(fatura.valor_pago || 0);
+    const saldoAtual = Math.max(0, valorTotal - valorPago);
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+      <div class="modal">
+        <div class="modal-content" style="max-width: 460px">
+          <div class="modal-header">
+            <h2 class="modal-title">Pagamento da Fatura</h2>
+            <button class="modal-close" id="fecharPagamentoFatura">&times;</button>
+          </div>
+          <form id="formPagamentoFatura">
+            <div class="modal-body">
+              <div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:1rem">
+                <div>
+                  <div style="font-size:0.8rem;color:var(--text-muted)">Cartão</div>
+                  <strong>${fatura.cartao_nome}</strong>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-size:0.8rem;color:var(--text-muted)">Fatura</div>
+                  <strong>${String(fatura.mes_referencia).padStart(2, '0')}/${fatura.ano_referencia}</strong>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem">
+                <div style="padding:0.75rem;border-radius:0.5rem;background:var(--bg-glass)">
+                  <div style="font-size:0.75rem;color:var(--text-muted)">Valor total</div>
+                  <strong>${formatCurrency(valorTotal)}</strong>
+                </div>
+                <div style="padding:0.75rem;border-radius:0.5rem;background:var(--bg-glass)">
+                  <div style="font-size:0.75rem;color:var(--text-muted)">Saldo atual</div>
+                  <strong>${formatCurrency(saldoAtual)}</strong>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Valor pago (R$)</label>
+                <input type="number" id="faturaValorPago" class="form-control" step="0.01" min="0" value="${valorPago || valorTotal}" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Pago com a conta corrente</label>
+                <select id="faturaContaPagamento" class="form-control" required>
+                  <option value="">Selecione</option>
+                  ${contaCorrenteOptions()}
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Data do pagamento</label>
+                <input type="date" id="faturaDataPagamento" class="form-control" value="${dateInputValue(fatura.data_pagamento)}" required>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" id="cancelarPagamentoFatura">Cancelar</button>
+              <button type="submit" class="btn btn-success">Salvar Pagamento</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    document.getElementById('fecharPagamentoFatura').addEventListener('click', close);
+    document.getElementById('cancelarPagamentoFatura').addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    document.getElementById('formPagamentoFatura').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api.atualizarPagamentoFatura(fatura.id, {
+          valor_pago: parseFloat(document.getElementById('faturaValorPago').value),
+          conta_bancaria_id: document.getElementById('faturaContaPagamento').value,
+          data_pagamento: document.getElementById('faturaDataPagamento').value,
+        });
+        toast('Pagamento da fatura atualizado!', 'success');
+        close();
+        loadData();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
     });
   }
 

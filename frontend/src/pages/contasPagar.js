@@ -2,6 +2,22 @@ import { api } from '../services/api.js';
 import { formatCurrency, formatDate, getMesNome, todayISO } from '../services/utils.js';
 import { toast } from '../components/toast.js';
 
+const FORMAS_PAGAMENTO = [
+  { value: 'CREDITO_BRADESCO', label: 'Crédito Bradesco', icon: '💳' },
+  { value: 'CREDITO_SANTANDER', label: 'Crédito Santander', icon: '💳' },
+  { value: 'DEBITO_BRADESCO', label: 'Débito Bradesco', icon: '🏦' },
+  { value: 'DEBITO_SANTANDER', label: 'Débito Santander', icon: '🏦' },
+  { value: 'DEBITO_CREFISA', label: 'Débito Crefisa', icon: '🏦' },
+  { value: 'PIX_BRADESCO', label: 'PIX Bradesco', icon: '📲' },
+  { value: 'PIX_SANTANDER', label: 'PIX Santander', icon: '📲' },
+  { value: 'PIX_CREFISA', label: 'PIX Crefisa', icon: '📲' },
+  { value: 'OUTROS', label: 'Outros', icon: '•' },
+];
+
+function getFormaPagamento(forma) {
+  return FORMAS_PAGAMENTO.find((f) => f.value === forma) || { value: forma, label: forma || 'Outros', icon: '•' };
+}
+
 export async function renderContasPagar(container) {
   const now = new Date();
   let mes = now.getMonth() + 1;
@@ -21,6 +37,7 @@ export async function renderContasPagar(container) {
           <button id="nextMonth">▶</button>
         </div>
         <button class="btn btn-primary" id="btnNovaPagar">+ Nova Conta</button>
+        <button class="btn btn-secondary" id="btnGerarRecorrentes">Gerar Recorrentes do Mês</button>
       </div>
     </div>
     <div class="filters-bar">
@@ -69,7 +86,7 @@ export async function renderContasPagar(container) {
       document.getElementById('tableContainer').innerHTML = `
         <table class="data-table">
           <thead><tr>
-            <th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Tipo</th><th>Pagamento</th><th>Origem</th><th>Status</th><th>Ações</th>
+            <th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Tipo</th><th>Recorrente</th><th>Pagamento</th><th>Origem</th><th>Status</th><th>Ações</th>
           </tr></thead>
           <tbody>${contas.map(c => `
             <tr>
@@ -77,7 +94,8 @@ export async function renderContasPagar(container) {
               <td style="font-weight:600;color:var(--danger)">${formatCurrency(c.valor)}</td>
               <td>${formatDate(c.data_vencimento)}</td>
               <td><span class="badge badge-info">${c.tipo}</span></td>
-              <td>${c.forma_pagamento === 'CARTAO' ? '💳' : c.forma_pagamento === 'DINHEIRO' ? '💵' : '📲'} ${c.forma_pagamento}</td>
+              <td><span class="badge ${c.recorrente ? 'badge-success' : 'badge-info'}">${c.recorrente ? 'SIM' : 'NÃO'}</span></td>
+              <td>${getFormaPagamento(c.forma_pagamento).icon} ${getFormaPagamento(c.forma_pagamento).label}</td>
               <td><span class="badge badge-${c.origem.toLowerCase()}">${c.origem}</span></td>
               <td><span class="badge ${c.status === 'PAGO' ? 'badge-success' : 'badge-warning'}">${c.status}</span></td>
               <td>
@@ -89,18 +107,15 @@ export async function renderContasPagar(container) {
               </td>
             </tr>
           `).join('')}</tbody>
-          <tfoot><tr><td colspan="1" style="font-weight:700;padding:0.75rem 1rem">Total</td><td style="font-weight:700;color:var(--danger);padding:0.75rem 1rem">${formatCurrency(total)}</td><td colspan="6"></td></tr></tfoot>
+          <tfoot><tr><td colspan="1" style="font-weight:700;padding:0.75rem 1rem">Total</td><td style="font-weight:700;color:var(--danger);padding:0.75rem 1rem">${formatCurrency(total)}</td><td colspan="7"></td></tr></tfoot>
         </table>
       `;
 
       // Pagar
       document.querySelectorAll('[data-pagar]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          try {
-            await api.atualizarPagar(btn.dataset.pagar, { status: 'PAGO', data_pagamento: todayISO() });
-            toast('Conta marcada como paga!', 'success');
-            loadData();
-          } catch(e) { toast(e.message, 'error'); }
+        btn.addEventListener('click', () => {
+          const conta = contas.find(x => x.id == btn.dataset.pagar);
+          if (conta) showPagamentoModal(conta);
         });
       });
 
@@ -128,6 +143,12 @@ export async function renderContasPagar(container) {
     }
   }
 
+  function formaPagamentoOptions(selected = 'OUTROS') {
+    return FORMAS_PAGAMENTO.map((forma) => (
+      `<option value="${forma.value}" ${selected === forma.value ? 'selected' : ''}>${forma.label}</option>`
+    )).join('');
+  }
+
   function showModal(conta = null) {
     const isEdit = !!conta;
     const dataFormatada = conta ? formatDate(conta.data_vencimento).split('/').reverse().join('-') : '';
@@ -145,11 +166,17 @@ export async function renderContasPagar(container) {
               </div>
               <div class="two-col">
                 <div class="form-group"><label>Tipo</label><select class="form-select" id="tipo"><option value="VARIAVEL" ${conta?.tipo==='VARIAVEL'?'selected':''}>Variável</option><option value="FIXA" ${conta?.tipo==='FIXA'?'selected':''}>Fixa</option></select></div>
-                <div class="form-group"><label>Forma Pgto</label><select class="form-select" id="forma_pagamento"><option value="OUTROS" ${conta?.forma_pagamento==='OUTROS'?'selected':''}>PIX/Outros</option><option value="DINHEIRO" ${conta?.forma_pagamento==='DINHEIRO'?'selected':''}>Dinheiro</option></select></div>
+                <div class="form-group"><label>Forma Pgto</label><select class="form-select" id="forma_pagamento">${formaPagamentoOptions(conta?.forma_pagamento || 'OUTROS')}</select></div>
               </div>
               <div class="two-col">
                 <div class="form-group"><label>Origem</label><select class="form-select" id="origem"><option value="PF" ${conta?.origem==='PF'?'selected':''}>Pessoa Física</option><option value="PJ" ${conta?.origem==='PJ'?'selected':''}>Pessoa Jurídica</option></select></div>
                 <div class="form-group"><label>Categoria</label><select class="form-select" id="categoria_id"><option value="">Nenhuma</option>${categorias.map(c=>`<option value="${c.id}" ${conta?.categoria_id===c.id?'selected':''}>${c.nome}</option>`).join('')}</select></div>
+              </div>
+              <div class="form-group" style="padding:0.75rem;border-radius:0.5rem;background:var(--bg-glass)">
+                <label style="display:flex;align-items:center;gap:0.5rem;margin:0;cursor:pointer">
+                  <input type="checkbox" id="recorrente" ${conta?.recorrente ? 'checked' : ''} />
+                  Conta recorrente mensal
+                </label>
               </div>
               <div class="form-group"><label>Observação</label><textarea class="form-input" id="observacao" rows="2">${conta?.observacao || ''}</textarea></div>
             </div>
@@ -175,6 +202,7 @@ export async function renderContasPagar(container) {
           forma_pagamento: document.getElementById('forma_pagamento').value,
           origem: document.getElementById('origem').value,
           categoria_id: document.getElementById('categoria_id').value || null,
+          recorrente: document.getElementById('recorrente').checked,
           observacao: document.getElementById('observacao').value,
         };
 
@@ -191,12 +219,73 @@ export async function renderContasPagar(container) {
     });
   }
 
+  function showPagamentoModal(conta) {
+    document.getElementById('modalContainer').innerHTML = `
+      <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" style="max-width:440px">
+          <div class="modal-header"><h3>Registrar Pagamento</h3><button id="closeModal" style="font-size:1.5rem;color:var(--text-muted)">✕</button></div>
+          <form id="formPagamento">
+            <div class="modal-body">
+              <div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:1rem">
+                <div>
+                  <div style="font-size:0.8rem;color:var(--text-muted)">Conta</div>
+                  <strong>${conta.descricao}</strong>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-size:0.8rem;color:var(--text-muted)">Valor</div>
+                  <strong style="color:var(--danger)">${formatCurrency(conta.valor)}</strong>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Forma de pagamento</label>
+                <select class="form-select" id="pagamento_forma" required>${formaPagamentoOptions(conta.forma_pagamento || 'OUTROS')}</select>
+              </div>
+              <div class="form-group">
+                <label>Data do pagamento</label>
+                <input type="date" class="form-input" id="pagamento_data" value="${todayISO()}" required />
+              </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" id="cancelModal">Cancelar</button><button type="submit" class="btn btn-success">Confirmar Pagamento</button></div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    const close = () => document.getElementById('modalContainer').innerHTML = '';
+    document.getElementById('closeModal').addEventListener('click', close);
+    document.getElementById('cancelModal').addEventListener('click', close);
+    document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) close(); });
+
+    document.getElementById('formPagamento').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api.atualizarPagar(conta.id, {
+          status: 'PAGO',
+          forma_pagamento: document.getElementById('pagamento_forma').value,
+          data_pagamento: document.getElementById('pagamento_data').value,
+        });
+        toast('Conta marcada como paga!', 'success');
+        close();
+        loadData();
+      } catch(e) { toast(e.message, 'error'); }
+    });
+  }
+
   document.getElementById('prevMonth').addEventListener('click', () => { mes--; if(mes<1){mes=12;ano--;} loadData(); });
   document.getElementById('nextMonth').addEventListener('click', () => { mes++; if(mes>12){mes=1;ano++;} loadData(); });
   document.getElementById('filterStatus').addEventListener('change', loadData);
   document.getElementById('filterOrigem').addEventListener('change', loadData);
   document.getElementById('filterTipo').addEventListener('change', loadData);
   document.getElementById('btnNovaPagar').addEventListener('click', () => showModal());
+  document.getElementById('btnGerarRecorrentes').addEventListener('click', async () => {
+    try {
+      const res = await api.gerarRecorrenciasMensal(mes, ano);
+      toast(res.message || 'Recorrentes geradas!', 'success');
+      loadData();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  });
 
   await loadCategorias();
   loadData();

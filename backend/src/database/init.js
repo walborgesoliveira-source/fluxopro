@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS contas_pagar (
   data_pagamento DATE,
   tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('FIXA', 'VARIAVEL')),
   status VARCHAR(10) DEFAULT 'PENDENTE' CHECK (status IN ('PENDENTE', 'PAGO')),
-  forma_pagamento VARCHAR(20) DEFAULT 'OUTROS' CHECK (forma_pagamento IN ('CARTAO', 'DINHEIRO', 'OUTROS')),
+  forma_pagamento VARCHAR(30) DEFAULT 'OUTROS',
   origem VARCHAR(5) DEFAULT 'PF' CHECK (origem IN ('PF', 'PJ')),
   observacao TEXT,
   recorrente BOOLEAN DEFAULT false,
@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS contas_receber (
   status VARCHAR(15) DEFAULT 'A_RECEBER' CHECK (status IN ('A_RECEBER', 'RECEBIDO')),
   origem_tipo VARCHAR(10) DEFAULT 'CLIENTE' CHECK (origem_tipo IN ('CLIENTE', 'SERVICO', 'OUTROS')),
   origem VARCHAR(5) DEFAULT 'PF' CHECK (origem IN ('PF', 'PJ')),
+  conta_bancaria_id INTEGER,
   observacao TEXT,
   recorrencia_id INTEGER REFERENCES recorrencias(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -89,14 +90,29 @@ CREATE TABLE IF NOT EXISTS contas_receber (
 CREATE TABLE IF NOT EXISTS movimentacoes (
   id SERIAL PRIMARY KEY,
   usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+  conta_bancaria_id INTEGER,
   tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('ENTRADA', 'SAIDA')),
   valor DECIMAL(12,2) NOT NULL,
   descricao VARCHAR(255),
   origem VARCHAR(5) DEFAULT 'PF' CHECK (origem IN ('PF', 'PJ')),
+  forma_pagamento VARCHAR(30),
   referencia_tipo VARCHAR(20),
   referencia_id INTEGER,
   data_movimentacao DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ================================================
+-- TABELA: contas_bancarias
+-- ================================================
+CREATE TABLE IF NOT EXISTS contas_bancarias (
+  id SERIAL PRIMARY KEY,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+  nome VARCHAR(80) NOT NULL,
+  saldo_inicial DECIMAL(12,2) DEFAULT 0,
+  ativo BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(usuario_id, nome)
 );
 
 -- ================================================
@@ -140,6 +156,7 @@ CREATE TABLE IF NOT EXISTS faturas (
   mes_referencia INTEGER NOT NULL,
   ano_referencia INTEGER NOT NULL,
   valor_total DECIMAL(12,2) DEFAULT 0,
+  valor_pago DECIMAL(12,2) DEFAULT 0,
   status VARCHAR(10) DEFAULT 'ABERTA' CHECK (status IN ('ABERTA', 'FECHADA', 'PAGA')),
   data_pagamento DATE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

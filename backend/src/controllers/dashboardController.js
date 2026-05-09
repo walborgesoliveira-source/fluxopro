@@ -107,6 +107,76 @@ const dashboardController = {
       console.error(e);
       res.status(500).json({ error: 'Erro interno.' });
     }
+  },
+
+  async contasCorrentes(req, res) {
+    try {
+      await pool.query(`
+        INSERT INTO contas_bancarias (usuario_id, nome, saldo_inicial)
+        SELECT $1, banco.nome, 0
+        FROM (VALUES ('Bradesco'), ('Santander'), ('Crefisa')) AS banco(nome)
+        ON CONFLICT (usuario_id, nome) DO NOTHING
+      `, [req.userId]);
+
+      const result = await pool.query(`
+        SELECT
+          cb.id,
+          cb.nome,
+          cb.saldo_inicial,
+          COALESCE(SUM(CASE WHEN m.tipo = 'ENTRADA' THEN m.valor ELSE 0 END), 0) as entradas,
+          COALESCE(SUM(CASE WHEN m.tipo = 'SAIDA' THEN m.valor ELSE 0 END), 0) as saidas,
+          cb.saldo_inicial
+            + COALESCE(SUM(CASE WHEN m.tipo = 'ENTRADA' THEN m.valor ELSE 0 END), 0)
+            - COALESCE(SUM(CASE WHEN m.tipo = 'SAIDA' THEN m.valor ELSE 0 END), 0) as saldo
+        FROM contas_bancarias cb
+        LEFT JOIN movimentacoes m ON m.conta_bancaria_id = cb.id
+        WHERE cb.usuario_id = $1 AND cb.ativo = true
+        GROUP BY cb.id, cb.nome, cb.saldo_inicial
+        ORDER BY CASE cb.nome WHEN 'Bradesco' THEN 1 WHEN 'Santander' THEN 2 WHEN 'Crefisa' THEN 3 ELSE 4 END, cb.nome
+      `, [req.userId]);
+
+      res.json({
+        contas: result.rows.map((r) => ({
+          ...r,
+          saldo_inicial: parseFloat(r.saldo_inicial),
+          entradas: parseFloat(r.entradas),
+          saidas: parseFloat(r.saidas),
+          saldo: parseFloat(r.saldo),
+        })),
+      });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Erro interno.' });
+    }
+  },
+
+  async atualizarContaCorrente(req, res) {
+    try {
+      const { id } = req.params;
+      const { saldo_inicial } = req.body;
+      const saldo = parseFloat(saldo_inicial);
+
+      if (Number.isNaN(saldo)) {
+        return res.status(400).json({ error: 'Saldo inicial inválido.' });
+      }
+
+      const result = await pool.query(
+        `UPDATE contas_bancarias
+         SET saldo_inicial = $1
+         WHERE id = $2 AND usuario_id = $3
+         RETURNING *`,
+        [saldo, id, req.userId]
+      );
+
+      if (!result.rows.length) {
+        return res.status(404).json({ error: 'Conta corrente não encontrada.' });
+      }
+
+      res.json({ conta: result.rows[0], message: 'Saldo inicial atualizado com sucesso!' });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Erro interno.' });
+    }
   }
 };
 

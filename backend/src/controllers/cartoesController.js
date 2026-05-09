@@ -112,6 +112,145 @@ const cartoesController = {
     }
   },
 
+  async atualizarPagamentoFatura(req, res) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { id } = req.params;
+      const { valor_pago, data_pagamento, conta_bancaria_id } = req.body;
+      const valorPago = parseFloat(valor_pago);
+
+      if (Number.isNaN(valorPago) || valorPago < 0) {
+        throw new Error('Valor pago inválido.');
+      }
+
+      let contaBancariaId = conta_bancaria_id || null;
+      if (valorPago > 0) {
+        if (!contaBancariaId) {
+          throw new Error('Informe de qual conta corrente saiu o pagamento.');
+        }
+
+        const contaRes = await client.query(
+          'SELECT id FROM contas_bancarias WHERE id = $1 AND usuario_id = $2 AND ativo = true',
+          [contaBancariaId, req.userId]
+        );
+
+        if (!contaRes.rows.length) {
+          throw new Error('Conta corrente inválida.');
+        }
+      }
+
+      const result = await client.query(
+        `UPDATE faturas
+         SET valor_pago = $1,
+             data_pagamento = $2,
+             status = CASE
+               WHEN $1 >= valor_total THEN 'PAGA'
+               WHEN status = 'PAGA' THEN 'ABERTA'
+               ELSE status
+             END
+         WHERE id = $3 AND usuario_id = $4
+         RETURNING *`,
+        [valorPago, data_pagamento || null, id, req.userId]
+      );
+
+      if (!result.rows.length) {
+        throw new Error('Fatura não encontrada.');
+      }
+
+      await client.query(
+        `DELETE FROM movimentacoes
+         WHERE usuario_id = $1 AND referencia_tipo = 'FATURA_CARTAO' AND referencia_id = $2`,
+        [req.userId, id]
+      );
+
+      if (valorPago > 0) {
+        const fatura = result.rows[0];
+        const cartaoRes = await client.query('SELECT nome FROM cartoes WHERE id = $1', [fatura.cartao_id]);
+        const cartaoNome = cartaoRes.rows[0]?.nome || 'Cartão';
+        await client.query(
+          `INSERT INTO movimentacoes (usuario_id, conta_bancaria_id, tipo, valor, descricao, origem, forma_pagamento, referencia_tipo, referencia_id, data_movimentacao)
+           VALUES ($1, $2, 'SAIDA', $3, $4, 'PF', 'PAGAMENTO_FATURA_CARTAO', 'FATURA_CARTAO', $5, COALESCE($6, CURRENT_DATE))`,
+          [req.userId, contaBancariaId, valorPago, `Pagamento fatura ${cartaoNome} ${String(fatura.mes_referencia).padStart(2, '0')}/${fatura.ano_referencia}`, id, data_pagamento]
+        );
+      }
+
+      await client.query('COMMIT');
+      res.json({ fatura: result.rows[0], message: 'Pagamento da fatura atualizado!' });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      res.status(400).json({ error: e.message || 'Erro ao atualizar pagamento da fatura.' });
+    } finally {
+      client.release();
+    }
+  },
+
+  async salvarFaturaMes(req, res) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { id } = req.params;
+      const { mes, ano, valor_total } = req.body;
+      const mesRef = parseInt(mes, 10);
+      const anoRef = parseInt(ano, 10);
+      const valorTotal = parseFloat(valor_total);
+
+      if (!mesRef || mesRef < 1 || mesRef > 12 || !anoRef) {
+        throw new Error('Mês e ano da fatura são obrigatórios.');
+      }
+
+      if (Number.isNaN(valorTotal) || valorTotal < 0) {
+        throw new Error('Valor da fatura inválido.');
+      }
+
+      const cartaoRes = await client.query(
+        'SELECT id FROM cartoes WHERE id = $1 AND usuario_id = $2',
+        [id, req.userId]
+      );
+      if (!cartaoRes.rows.length) {
+        throw new Error('Cartão não encontrado.');
+      }
+
+      const faturaRes = await client.query(
+        'SELECT id FROM faturas WHERE cartao_id = $1 AND usuario_id = $2 AND mes_referencia = $3 AND ano_referencia = $4 ORDER BY id ASC LIMIT 1',
+        [id, req.userId, mesRef, anoRef]
+      );
+
+      let result;
+      if (faturaRes.rows.length) {
+        result = await client.query(
+          `UPDATE faturas
+           SET valor_total = $1,
+               valor_pago = LEAST(COALESCE(valor_pago, 0), $1),
+               status = CASE
+                 WHEN LEAST(COALESCE(valor_pago, 0), $1) >= $1 AND $1 > 0 THEN 'PAGA'
+                 WHEN status = 'PAGA' THEN 'ABERTA'
+                 ELSE status
+               END
+           WHERE id = $2 AND usuario_id = $3
+           RETURNING *`,
+          [valorTotal, faturaRes.rows[0].id, req.userId]
+        );
+      } else {
+        result = await client.query(
+          `INSERT INTO faturas (cartao_id, usuario_id, mes_referencia, ano_referencia, valor_total, valor_pago)
+           VALUES ($1, $2, $3, $4, $5, 0)
+           RETURNING *`,
+          [id, req.userId, mesRef, anoRef, valorTotal]
+        );
+      }
+
+      await client.query('COMMIT');
+      res.json({ fatura: result.rows[0], message: 'Fatura do mês salva com sucesso!' });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      res.status(400).json({ error: e.message || 'Erro ao salvar fatura do mês.' });
+    } finally {
+      client.release();
+    }
+  },
+
   async adicionarCompra(req, res) {
     const client = await pool.connect();
     try {

@@ -7,9 +7,11 @@ router.get('/', cartoesController.listarCartoes);
 router.post('/', cartoesController.criarCartao);
 router.put('/:id', cartoesController.editarCartao);
 router.delete('/:id', cartoesController.excluirCartao);
+router.post('/:id/fatura-mes', cartoesController.salvarFaturaMes);
 
 // Rotas de faturas e compras
 router.get('/faturas', cartoesController.listarFaturas);
+router.put('/faturas/:id/pagamento', cartoesController.atualizarPagamentoFatura);
 router.delete('/faturas/:id', cartoesController.excluirFatura);
 router.post('/compras', cartoesController.adicionarCompra);
 router.get('/faturas/:id/compras', cartoesController.listarComprasFatura);

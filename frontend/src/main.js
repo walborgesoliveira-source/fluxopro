@@ -9,7 +9,6 @@ import { renderDashboard } from './pages/dashboard.js';
 import { renderContasPagar } from './pages/contasPagar.js';
 import { renderContasReceber } from './pages/contasReceber.js';
 import { renderCartoes } from './pages/cartoes.js';
-import { renderRecorrencias } from './pages/recorrencias.js';
 import { renderRelatorios } from './pages/relatorios.js';
 
 const app = document.getElementById('app');
@@ -55,9 +54,6 @@ function renderLayout(activePage) {
           <div class="nav-section-title">Mais Recursos</div>
           <a class="nav-item ${activePage === 'cartoes' ? 'active' : ''}" href="#/cartoes">
             <span class="nav-icon">💳</span> Cartões
-          </a>
-          <a class="nav-item ${activePage === 'recorrencias' ? 'active' : ''}" href="#/recorrencias">
-            <span class="nav-icon">🔁</span> Recorrências
           </a>
           <a class="nav-item ${activePage === 'relatorios' ? 'active' : ''}" href="#/relatorios">
             <span class="nav-icon">📈</span> Relatórios
@@ -147,7 +143,6 @@ async function router() {
   if (path === '/contas-pagar') activePage = 'pagar';
   if (path === '/contas-receber') activePage = 'receber';
   if (path === '/cartoes') activePage = 'cartoes';
-  if (path === '/recorrencias') activePage = 'recorrencias';
   if (path === '/relatorios') activePage = 'relatorios';
 
   const content = renderLayout(activePage);
@@ -164,9 +159,6 @@ async function router() {
       break;
     case '/cartoes':
       await renderCartoes(content);
-      break;
-    case '/recorrencias':
-      await renderRecorrencias(content);
       break;
     case '/relatorios':
       await renderRelatorios(content);

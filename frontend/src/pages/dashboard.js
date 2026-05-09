@@ -51,10 +51,11 @@ export async function renderDashboard(container) {
     document.getElementById('currentMonth').textContent = `${getMesNome(mes)} ${ano}`;
 
     try {
-      const [resumo, caixa, graficos] = await Promise.all([
+      const [resumo, caixa, graficos, contasCorrentes] = await Promise.all([
         api.resumo(mes, ano),
         api.caixaOrigem(mes, ano),
-        api.graficos(mes, ano)
+        api.graficos(mes, ano),
+        api.contasCorrentes()
       ]);
 
       const saldo = resumo.caixa.saldo;
@@ -85,9 +86,10 @@ export async function renderDashboard(container) {
 
       // Caixa PF/PJ
       const r = caixa.resumo;
+      const saldoTotalContas = contasCorrentes.contas.reduce((total, conta) => total + conta.saldo, 0);
       document.getElementById('caixaPFPJ').innerHTML = `
         <h3 style="font-size:1rem;font-weight:600;margin-bottom:1rem">💼 Caixa por Origem</h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
           <div style="padding:1rem;border-radius:0.75rem;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15)">
             <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem"><span class="badge badge-pf">PF</span> Pessoa Física</div>
             <div style="font-size:0.85rem;color:var(--success)">+ ${formatCurrency(r.PF.entradas)}</div>
@@ -101,7 +103,40 @@ export async function renderDashboard(container) {
             <div style="font-size:1.1rem;font-weight:700;margin-top:0.5rem;color:${r.PJ.saldo >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(r.PJ.saldo)}</div>
           </div>
         </div>
+        <div style="border-top:1px solid var(--border-color);padding-top:1rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+            <h4 style="font-size:0.9rem;font-weight:600;margin:0">Contas Correntes</h4>
+            <strong style="color:${saldoTotalContas >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(saldoTotalContas)}</strong>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.5rem">
+            ${contasCorrentes.contas.map(conta => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:0.65rem 0.75rem;border-radius:0.5rem;background:var(--bg-glass)">
+                <span style="font-size:0.85rem;color:var(--text-secondary)">${conta.nome}</span>
+                <span style="display:flex;align-items:center;gap:0.5rem">
+                  <span style="font-weight:700;color:${conta.saldo >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(conta.saldo)}</span>
+                  <button class="btn btn-sm btn-secondary" data-editar-conta="${conta.id}" data-saldo="${conta.saldo_inicial}" data-nome="${conta.nome}" title="Editar saldo inicial">✎</button>
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
       `;
+
+      document.querySelectorAll('[data-editar-conta]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const valor = prompt(`Saldo inicial de ${btn.dataset.nome}:`, btn.dataset.saldo || '0');
+          if (valor === null) return;
+          const saldo = parseFloat(valor.replace(',', '.'));
+          if (Number.isNaN(saldo)) return;
+
+          try {
+            await api.atualizarContaCorrente(btn.dataset.editarConta, { saldo_inicial: saldo });
+            loadData();
+          } catch (err) {
+            alert(err.message);
+          }
+        });
+      });
 
       // Resumo contas
       document.getElementById('resumoContas').innerHTML = `
@@ -126,11 +161,10 @@ export async function renderDashboard(container) {
         </div>
       `;
 
-      // Gráficos
-      if (chartLineInstance) chartLineInstance.destroy();
-      if (chartPieInstance) chartPieInstance.destroy();
-
       const ctxLine = document.getElementById('chartEvolucao').getContext('2d');
+      const existingLine = Chart.getChart(ctxLine.canvas);
+      if (existingLine) existingLine.destroy();
+      if (chartLineInstance) chartLineInstance.destroy();
       chartLineInstance = new Chart(ctxLine, {
         type: 'bar',
         data: {
@@ -144,6 +178,9 @@ export async function renderDashboard(container) {
       });
 
       const ctxPie = document.getElementById('chartCategorias').getContext('2d');
+      const existingPie = Chart.getChart(ctxPie.canvas);
+      if (existingPie) existingPie.destroy();
+      if (chartPieInstance) chartPieInstance.destroy();
       const hasCatData = graficos.despesasPorCategoria.length > 0;
       chartPieInstance = new Chart(ctxPie, {
         type: 'doughnut',

@@ -71,6 +71,8 @@ const api = {
   resumo: (mes, ano) => request('GET', `/dashboard/resumo?mes=${mes}&ano=${ano}`),
   caixaOrigem: (mes, ano) => request('GET', `/dashboard/caixa-origem?mes=${mes}&ano=${ano}`),
   graficos: (mes, ano) => request('GET', `/dashboard/graficos?mes=${mes}&ano=${ano}`),
+  contasCorrentes: () => request('GET', '/dashboard/contas-correntes'),
+  atualizarContaCorrente: (id, dados) => request('PUT', `/dashboard/contas-correntes/${id}`, dados),
 
   // Categorias
   listarCategorias: (tipo = '') => request('GET', `/categorias${tipo ? '?tipo=' + tipo : ''}`),
@@ -81,7 +83,9 @@ const api = {
   criarCartao: (dados) => request('POST', '/cartoes', dados),
   editarCartao: (id, dados) => request('PUT', `/cartoes/${id}`, dados),
   excluirCartao: (id) => request('DELETE', `/cartoes/${id}`),
+  salvarFaturaMes: (cartaoId, dados) => request('POST', `/cartoes/${cartaoId}/fatura-mes`, dados),
   listarFaturas: (cartaoId = '') => request('GET', `/cartoes/faturas${cartaoId ? '?cartao_id=' + cartaoId : ''}`),
+  atualizarPagamentoFatura: (id, dados) => request('PUT', `/cartoes/faturas/${id}/pagamento`, dados),
   excluirFatura: (id) => request('DELETE', `/cartoes/faturas/${id}`),
   listarComprasFatura: (id) => request('GET', `/cartoes/faturas/${id}/compras`),
   adicionarCompra: (dados) => request('POST', '/cartoes/compras', dados),

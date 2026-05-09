@@ -286,8 +286,8 @@ const recorrenciasController = {
 
           if (jaExiste.rows.length === 0) {
             await client.query(
-              `INSERT INTO contas_pagar (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo, origem, recorrencia_id)
-               VALUES ($1, $2, $3, $4, $5, 'FIXA', $6, $7)`,
+              `INSERT INTO contas_pagar (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo, origem, recorrencia_id, recorrente)
+               VALUES ($1, $2, $3, $4, $5, 'FIXA', $6, $7, true)`,
               [req.userId, rec.categoria_id, rec.descricao, rec.valor, dataVencimento, rec.origem, rec.id]
             );
             criadas++;

@@ -1,11 +1,41 @@
 const pool = require('../database/connection');
 
+async function resolverContaBancaria(client, usuarioId, contaBancariaId) {
+  if (!contaBancariaId) return null;
+
+  const contaPorCodigo = {
+    BRADESCO: 'Bradesco',
+    SANTANDER: 'Santander',
+    CREFISA: 'Crefisa',
+  };
+  const bancoNome = contaPorCodigo[String(contaBancariaId).toUpperCase()] || null;
+
+  if (bancoNome) {
+    const criada = await client.query(
+      `INSERT INTO contas_bancarias (usuario_id, nome, saldo_inicial)
+       VALUES ($1, $2, 0)
+       ON CONFLICT (usuario_id, nome) DO UPDATE SET ativo = contas_bancarias.ativo
+       RETURNING id`,
+      [usuarioId, bancoNome]
+    );
+    return criada.rows[0].id;
+  }
+
+  const contaRes = await client.query(
+    'SELECT id FROM contas_bancarias WHERE id = $1 AND usuario_id = $2 AND ativo = true',
+    [contaBancariaId, usuarioId]
+  );
+  return contaRes.rows[0]?.id || null;
+}
+
 const contasReceberController = {
   async listar(req, res) {
     try {
       const { mes, ano, status, origem, tipo } = req.query;
-      let query = `SELECT cr.*, c.nome as categoria_nome, c.cor as categoria_cor
-        FROM contas_receber cr LEFT JOIN categorias c ON cr.categoria_id = c.id
+      let query = `SELECT cr.*, c.nome as categoria_nome, c.cor as categoria_cor, cb.nome as conta_bancaria_nome
+        FROM contas_receber cr
+        LEFT JOIN categorias c ON cr.categoria_id = c.id
+        LEFT JOIN contas_bancarias cb ON cr.conta_bancaria_id = cb.id
         WHERE cr.usuario_id = $1`;
       const params = [req.userId];
       let p = 2;
@@ -20,39 +50,91 @@ const contasReceberController = {
   },
 
   async criar(req, res) {
+    const client = await pool.connect();
     try {
-      const { descricao, valor, data_vencimento, tipo, origem_tipo, origem, categoria_id, observacao } = req.body;
-      const result = await pool.query(
-        `INSERT INTO contas_receber (usuario_id, descricao, valor, data_vencimento, tipo, origem_tipo, origem, categoria_id, observacao)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [req.userId, descricao, valor, data_vencimento, tipo, origem_tipo||'CLIENTE', origem||'PF', categoria_id, observacao]
+      const { descricao, valor, data_vencimento, tipo, origem_tipo, origem, categoria_id, observacao, conta_bancaria_id } = req.body;
+      const contaBancariaId = await resolverContaBancaria(client, req.userId, conta_bancaria_id);
+      if (conta_bancaria_id && !contaBancariaId) {
+        return res.status(400).json({ error: 'Conta de depósito inválida.' });
+      }
+
+      const result = await client.query(
+        `INSERT INTO contas_receber (usuario_id, descricao, valor, data_vencimento, tipo, origem_tipo, origem, categoria_id, observacao, conta_bancaria_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        [req.userId, descricao, valor, data_vencimento, tipo, origem_tipo||'CLIENTE', origem||'PF', categoria_id, observacao, contaBancariaId]
       );
       res.status(201).json({ conta: result.rows[0], message: 'Conta a receber criada!' });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erro interno.' }); }
+    finally { client.release(); }
   },
 
   async atualizar(req, res) {
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       const { id } = req.params;
-      const { descricao, valor, data_vencimento, tipo, status, origem_tipo, origem, categoria_id, observacao, data_recebimento } = req.body;
-      const result = await pool.query(
+      const { descricao, valor, data_vencimento, tipo, status, origem_tipo, origem, categoria_id, observacao, data_recebimento, conta_bancaria_id } = req.body;
+
+      const anteriorRes = await client.query(
+        'SELECT * FROM contas_receber WHERE id = $1 AND usuario_id = $2 FOR UPDATE',
+        [id, req.userId]
+      );
+      if (!anteriorRes.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Conta não encontrada.' });
+      }
+      const anterior = anteriorRes.rows[0];
+
+      let contaBancariaId = Object.prototype.hasOwnProperty.call(req.body, 'conta_bancaria_id') ? conta_bancaria_id : undefined;
+      if (contaBancariaId) {
+        contaBancariaId = await resolverContaBancaria(client, req.userId, contaBancariaId);
+        if (!contaBancariaId) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Conta de depósito inválida.' });
+        }
+      }
+
+      const result = await client.query(
         `UPDATE contas_receber SET descricao=COALESCE($1,descricao), valor=COALESCE($2,valor),
          data_vencimento=COALESCE($3,data_vencimento), tipo=COALESCE($4,tipo), status=COALESCE($5,status),
          origem_tipo=COALESCE($6,origem_tipo), origem=COALESCE($7,origem), categoria_id=COALESCE($8,categoria_id),
-         observacao=COALESCE($9,observacao), data_recebimento=$10, updated_at=CURRENT_TIMESTAMP
-         WHERE id=$11 AND usuario_id=$12 RETURNING *`,
-        [descricao, valor, data_vencimento, tipo, status, origem_tipo, origem, categoria_id, observacao, data_recebimento, id, req.userId]
+         observacao=COALESCE($9,observacao), data_recebimento=$10, conta_bancaria_id=COALESCE($11,conta_bancaria_id),
+         updated_at=CURRENT_TIMESTAMP
+         WHERE id=$12 AND usuario_id=$13 RETURNING *`,
+        [descricao, valor, data_vencimento, tipo, status, origem_tipo, origem, categoria_id, observacao, data_recebimento, contaBancariaId, id, req.userId]
       );
-      if (!result.rows.length) return res.status(404).json({ error: 'Conta não encontrada.' });
-      if (status === 'RECEBIDO') {
-        await pool.query(
-          `INSERT INTO movimentacoes (usuario_id,tipo,valor,descricao,origem,referencia_tipo,referencia_id,data_movimentacao)
-           VALUES ($1,'ENTRADA',$2,$3,$4,'CONTA_RECEBER',$5,COALESCE($6,CURRENT_DATE))`,
-          [req.userId, result.rows[0].valor, result.rows[0].descricao, result.rows[0].origem, id, data_recebimento]
+
+      const contaAtualizada = result.rows[0];
+      const deveSincronizarRecebimento = contaAtualizada.status === 'RECEBIDO'
+        && (anterior.status !== 'RECEBIDO' || String(anterior.conta_bancaria_id || '') !== String(contaAtualizada.conta_bancaria_id || ''));
+      if (deveSincronizarRecebimento) {
+        if (!contaAtualizada.conta_bancaria_id) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Informe a conta onde o valor foi depositado.' });
+        }
+
+        await client.query(
+          `DELETE FROM movimentacoes
+           WHERE usuario_id = $1 AND referencia_tipo = 'CONTA_RECEBER' AND referencia_id = $2`,
+          [req.userId, id]
+        );
+
+        await client.query(
+          `INSERT INTO movimentacoes (usuario_id,conta_bancaria_id,tipo,valor,descricao,origem,referencia_tipo,referencia_id,data_movimentacao)
+           VALUES ($1,$2,'ENTRADA',$3,$4,$5,'CONTA_RECEBER',$6,COALESCE($7,CURRENT_DATE))`,
+          [req.userId, contaAtualizada.conta_bancaria_id, contaAtualizada.valor, contaAtualizada.descricao, contaAtualizada.origem, id, data_recebimento]
         );
       }
-      res.json({ conta: result.rows[0], message: 'Conta atualizada!' });
-    } catch (e) { console.error(e); res.status(500).json({ error: 'Erro interno.' }); }
+
+      await client.query('COMMIT');
+      res.json({ conta: contaAtualizada, message: 'Conta atualizada!' });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      console.error(e);
+      res.status(500).json({ error: 'Erro interno.' });
+    } finally {
+      client.release();
+    }
   },
 
   async excluir(req, res) {
