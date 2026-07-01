@@ -45,8 +45,8 @@ async function sincronizarRecorrenciaContaPagar(client, usuarioId, conta) {
     await client.query(
       `UPDATE recorrencias
        SET descricao = $1, valor = $2, dia_vencimento = $3, categoria_id = $4, origem = $5,
-           observacao = $6, ativo = true
-       WHERE id = $7 AND usuario_id = $8`,
+           observacao = $6, forma_pagamento = $7, ativo = true
+       WHERE id = $8 AND usuario_id = $9`,
       [
         conta.descricao,
         conta.valor,
@@ -54,6 +54,7 @@ async function sincronizarRecorrenciaContaPagar(client, usuarioId, conta) {
         conta.categoria_id || null,
         conta.origem || 'PF',
         conta.observacao || null,
+        normalizarFormaPagamento(conta.forma_pagamento),
         conta.recorrencia_id,
         usuarioId
       ]
@@ -62,8 +63,9 @@ async function sincronizarRecorrenciaContaPagar(client, usuarioId, conta) {
   }
 
   const result = await client.query(
-    `INSERT INTO recorrencias (usuario_id, tipo, descricao, valor, dia_vencimento, categoria_id, origem, observacao, ativo)
-     VALUES ($1, 'PAGAR', $2, $3, $4, $5, $6, $7, true)
+    `INSERT INTO recorrencias
+       (usuario_id, tipo, descricao, valor, dia_vencimento, categoria_id, origem, observacao, forma_pagamento, ativo)
+     VALUES ($1, 'PAGAR', $2, $3, $4, $5, $6, $7, $8, true)
      RETURNING id`,
     [
       usuarioId,
@@ -72,7 +74,8 @@ async function sincronizarRecorrenciaContaPagar(client, usuarioId, conta) {
       diaVencimento,
       conta.categoria_id || null,
       conta.origem || 'PF',
-      conta.observacao || null
+      conta.observacao || null,
+      normalizarFormaPagamento(conta.forma_pagamento)
     ]
   );
   return result.rows[0].id;

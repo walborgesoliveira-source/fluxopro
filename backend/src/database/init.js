@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS recorrencias (
   categoria_id INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
   origem VARCHAR(5) DEFAULT 'PF' CHECK (origem IN ('PF', 'PJ')),
   observacao TEXT,
+  forma_pagamento VARCHAR(30) DEFAULT 'OUTROS',
   ativo BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

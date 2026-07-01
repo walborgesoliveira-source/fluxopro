@@ -11,6 +11,18 @@ const FORMAS_PAG = {
   PIX_DINHEIRO:      { label: 'Pix / Dinheiro',    icon: '💵', cor: '#22c55e' },
 };
 
+const FORMAS_RECORRENCIA = [
+  { value: 'CREDITO_BRADESCO', label: 'Crédito Bradesco' },
+  { value: 'CREDITO_SANTANDER', label: 'Crédito Santander' },
+  { value: 'DEBITO_BRADESCO', label: 'Débito Bradesco' },
+  { value: 'DEBITO_SANTANDER', label: 'Débito Santander' },
+  { value: 'DEBITO_CREFISA', label: 'Débito Crefisa' },
+  { value: 'PIX_BRADESCO', label: 'PIX Bradesco' },
+  { value: 'PIX_SANTANDER', label: 'PIX Santander' },
+  { value: 'PIX_CREFISA', label: 'PIX Crefisa' },
+  { value: 'OUTROS', label: 'Outros' },
+];
+
 export async function renderRecorrencias(container) {
   let categorias = [];
   let recorrencias = [];
@@ -416,6 +428,16 @@ export async function renderRecorrencias(container) {
                 <label>Observação</label>
                 <textarea class="form-input" id="observacao" rows="3">${rec?.observacao || ''}</textarea>
               </div>
+              <div class="form-group">
+                <label>Forma de pagamento mensal</label>
+                <select class="form-select" id="forma_pagamento">
+                  ${FORMAS_RECORRENCIA.map(forma => `
+                    <option value="${forma.value}" ${(rec?.forma_pagamento || 'OUTROS') === forma.value ? 'selected' : ''}>
+                      ${forma.label}
+                    </option>
+                  `).join('')}
+                </select>
+              </div>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" id="cancelModal">Cancelar</button>
@@ -442,6 +464,7 @@ export async function renderRecorrencias(container) {
           origem: document.getElementById('origem').value,
           categoria_id: document.getElementById('categoria_id').value || null,
           observacao: document.getElementById('observacao').value,
+          forma_pagamento: document.getElementById('forma_pagamento').value,
           ativo: document.getElementById('ativo').value === 'true'
         };
 

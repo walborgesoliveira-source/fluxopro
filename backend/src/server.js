@@ -100,6 +100,7 @@ async function runMigrations() {
 
     await pool.query(`
       ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS observacao TEXT;
+      ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(30) DEFAULT 'OUTROS';
 
       CREATE TABLE IF NOT EXISTS app_migrations (
         id VARCHAR(100) PRIMARY KEY,
@@ -160,8 +161,43 @@ async function runMigrations() {
         END IF;
       END
       $$;
+
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM app_migrations
+          WHERE id = '20260701_propagar_formas_pagamento'
+        ) THEN
+          WITH formas_junho AS (
+            SELECT DISTINCT ON (recorrencia_id)
+              recorrencia_id,
+              forma_pagamento
+            FROM contas_pagar
+            WHERE recorrencia_id IS NOT NULL
+              AND data_vencimento >= DATE '2026-06-01'
+              AND data_vencimento < DATE '2026-07-01'
+            ORDER BY recorrencia_id, data_vencimento DESC, id DESC
+          )
+          UPDATE recorrencias r
+          SET forma_pagamento = f.forma_pagamento
+          FROM formas_junho f
+          WHERE r.id = f.recorrencia_id;
+
+          UPDATE contas_pagar cp
+          SET forma_pagamento = r.forma_pagamento,
+              updated_at = CURRENT_TIMESTAMP
+          FROM recorrencias r
+          WHERE cp.recorrencia_id = r.id
+            AND cp.data_vencimento >= DATE '2026-07-01'
+            AND cp.forma_pagamento IS DISTINCT FROM r.forma_pagamento;
+
+          INSERT INTO app_migrations (id)
+          VALUES ('20260701_propagar_formas_pagamento');
+        END IF;
+      END
+      $$;
     `);
-    console.log('✅ Migration: observações das recorrências verificadas e propagadas.');
+    console.log('✅ Migration: observações e formas de pagamento das recorrências verificadas e propagadas.');
   } catch (e) {
     console.error('⚠️ Erro na migration:', e.message);
   }
