@@ -40,11 +40,11 @@ const recorrenciasController = {
 
   async criar(req, res) {
     try {
-      const { tipo, descricao, valor, dia_vencimento, categoria_id, origem } = req.body;
+      const { tipo, descricao, valor, dia_vencimento, categoria_id, origem, observacao } = req.body;
       const result = await pool.query(
-        `INSERT INTO recorrencias (usuario_id, tipo, descricao, valor, dia_vencimento, categoria_id, origem)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [req.userId, tipo, descricao, valor, dia_vencimento, categoria_id || null, origem || 'PF']
+        `INSERT INTO recorrencias (usuario_id, tipo, descricao, valor, dia_vencimento, categoria_id, origem, observacao)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [req.userId, tipo, descricao, valor, dia_vencimento, categoria_id || null, origem || 'PF', observacao || null]
       );
       res.status(201).json({ recorrencia: result.rows[0], message: 'Recorrência criada com sucesso!' });
     } catch (e) {
@@ -56,12 +56,13 @@ const recorrenciasController = {
   async atualizar(req, res) {
     try {
       const { id } = req.params;
-      const { tipo, descricao, valor, dia_vencimento, categoria_id, origem, ativo } = req.body;
+      const { tipo, descricao, valor, dia_vencimento, categoria_id, origem, observacao, ativo } = req.body;
       const result = await pool.query(
         `UPDATE recorrencias 
-         SET tipo = $1, descricao = $2, valor = $3, dia_vencimento = $4, categoria_id = $5, origem = $6, ativo = $7
-         WHERE id = $8 AND usuario_id = $9 RETURNING *`,
-        [tipo, descricao, valor, dia_vencimento, categoria_id || null, origem, ativo, id, req.userId]
+         SET tipo = $1, descricao = $2, valor = $3, dia_vencimento = $4, categoria_id = $5,
+             origem = $6, observacao = $7, ativo = $8
+         WHERE id = $9 AND usuario_id = $10 RETURNING *`,
+        [tipo, descricao, valor, dia_vencimento, categoria_id || null, origem, observacao || null, ativo, id, req.userId]
       );
       if (!result.rows.length) return res.status(404).json({ error: 'Recorrência não encontrada.' });
       res.json({ recorrencia: result.rows[0], message: 'Recorrência atualizada.' });
@@ -286,9 +287,10 @@ const recorrenciasController = {
 
           if (jaExiste.rows.length === 0) {
             await client.query(
-              `INSERT INTO contas_pagar (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo, origem, recorrencia_id, recorrente)
-               VALUES ($1, $2, $3, $4, $5, 'FIXA', $6, $7, true)`,
-              [req.userId, rec.categoria_id, rec.descricao, rec.valor, dataVencimento, rec.origem, rec.id]
+              `INSERT INTO contas_pagar
+                 (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo, origem, observacao, recorrencia_id, recorrente)
+               VALUES ($1, $2, $3, $4, $5, 'FIXA', $6, $7, $8, true)`,
+              [req.userId, rec.categoria_id, rec.descricao, rec.valor, dataVencimento, rec.origem, rec.observacao, rec.id]
             );
             criadas++;
           }
@@ -300,9 +302,10 @@ const recorrenciasController = {
 
           if (jaExiste.rows.length === 0) {
             await client.query(
-              `INSERT INTO contas_receber (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo, origem, recorrencia_id)
-               VALUES ($1, $2, $3, $4, $5, 'RECORRENTE', $6, $7)`,
-              [req.userId, rec.categoria_id, rec.descricao, rec.valor, dataVencimento, rec.origem, rec.id]
+              `INSERT INTO contas_receber
+                 (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo, origem, observacao, recorrencia_id)
+               VALUES ($1, $2, $3, $4, $5, 'RECORRENTE', $6, $7, $8)`,
+              [req.userId, rec.categoria_id, rec.descricao, rec.valor, dataVencimento, rec.origem, rec.observacao, rec.id]
             );
             criadas++;
           }

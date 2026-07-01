@@ -97,6 +97,71 @@ async function runMigrations() {
       )
     `);
     console.log('✅ Migration: tabela recorrencias_status verificada.');
+
+    await pool.query(`
+      ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS observacao TEXT;
+
+      CREATE TABLE IF NOT EXISTS app_migrations (
+        id VARCHAR(100) PRIMARY KEY,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM app_migrations
+          WHERE id = '20260701_propagar_observacoes_recorrencias'
+        ) THEN
+          WITH observacoes_mais_recentes AS (
+            SELECT DISTINCT ON (recorrencia_id)
+              recorrencia_id,
+              observacao
+            FROM (
+              SELECT recorrencia_id, observacao, data_vencimento, id
+              FROM contas_pagar
+              WHERE recorrencia_id IS NOT NULL
+                AND NULLIF(BTRIM(observacao), '') IS NOT NULL
+
+              UNION ALL
+
+              SELECT recorrencia_id, observacao, data_vencimento, id
+              FROM contas_receber
+              WHERE recorrencia_id IS NOT NULL
+                AND NULLIF(BTRIM(observacao), '') IS NOT NULL
+            ) contas_recorrentes
+            ORDER BY recorrencia_id, data_vencimento DESC, id DESC
+          )
+          UPDATE recorrencias r
+          SET observacao = o.observacao
+          FROM observacoes_mais_recentes o
+          WHERE r.id = o.recorrencia_id
+            AND NULLIF(BTRIM(r.observacao), '') IS NULL;
+
+          UPDATE contas_pagar cp
+          SET observacao = r.observacao,
+              updated_at = CURRENT_TIMESTAMP
+          FROM recorrencias r
+          WHERE cp.recorrencia_id = r.id
+            AND cp.data_vencimento >= DATE '2026-07-01'
+            AND NULLIF(BTRIM(cp.observacao), '') IS NULL
+            AND NULLIF(BTRIM(r.observacao), '') IS NOT NULL;
+
+          UPDATE contas_receber cr
+          SET observacao = r.observacao,
+              updated_at = CURRENT_TIMESTAMP
+          FROM recorrencias r
+          WHERE cr.recorrencia_id = r.id
+            AND cr.data_vencimento >= DATE '2026-07-01'
+            AND NULLIF(BTRIM(cr.observacao), '') IS NULL
+            AND NULLIF(BTRIM(r.observacao), '') IS NOT NULL;
+
+          INSERT INTO app_migrations (id)
+          VALUES ('20260701_propagar_observacoes_recorrencias');
+        END IF;
+      END
+      $$;
+    `);
+    console.log('✅ Migration: observações das recorrências verificadas e propagadas.');
   } catch (e) {
     console.error('⚠️ Erro na migration:', e.message);
   }

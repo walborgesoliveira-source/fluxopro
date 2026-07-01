@@ -5,4 +5,5 @@ dist/
 .DS_Store
 Thumbs.db
 *.sql
+*.dump
 *.csv

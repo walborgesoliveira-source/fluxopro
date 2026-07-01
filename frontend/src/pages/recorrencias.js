@@ -412,6 +412,10 @@ export async function renderRecorrencias(container) {
                   </select>
                 </div>
               </div>
+              <div class="form-group">
+                <label>Observação</label>
+                <textarea class="form-input" id="observacao" rows="3">${rec?.observacao || ''}</textarea>
+              </div>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" id="cancelModal">Cancelar</button>
@@ -437,6 +441,7 @@ export async function renderRecorrencias(container) {
           tipo: document.getElementById('tipo').value,
           origem: document.getElementById('origem').value,
           categoria_id: document.getElementById('categoria_id').value || null,
+          observacao: document.getElementById('observacao').value,
           ativo: document.getElementById('ativo').value === 'true'
         };
 

@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS recorrencias (
   dia_vencimento INTEGER NOT NULL CHECK (dia_vencimento BETWEEN 1 AND 31),
   categoria_id INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
   origem VARCHAR(5) DEFAULT 'PF' CHECK (origem IN ('PF', 'PJ')),
+  observacao TEXT,
   ativo BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -44,18 +44,36 @@ async function sincronizarRecorrenciaContaPagar(client, usuarioId, conta) {
   if (conta.recorrencia_id) {
     await client.query(
       `UPDATE recorrencias
-       SET descricao = $1, valor = $2, dia_vencimento = $3, categoria_id = $4, origem = $5, ativo = true
-       WHERE id = $6 AND usuario_id = $7`,
-      [conta.descricao, conta.valor, diaVencimento, conta.categoria_id || null, conta.origem || 'PF', conta.recorrencia_id, usuarioId]
+       SET descricao = $1, valor = $2, dia_vencimento = $3, categoria_id = $4, origem = $5,
+           observacao = $6, ativo = true
+       WHERE id = $7 AND usuario_id = $8`,
+      [
+        conta.descricao,
+        conta.valor,
+        diaVencimento,
+        conta.categoria_id || null,
+        conta.origem || 'PF',
+        conta.observacao || null,
+        conta.recorrencia_id,
+        usuarioId
+      ]
     );
     return conta.recorrencia_id;
   }
 
   const result = await client.query(
-    `INSERT INTO recorrencias (usuario_id, tipo, descricao, valor, dia_vencimento, categoria_id, origem, ativo)
-     VALUES ($1, 'PAGAR', $2, $3, $4, $5, $6, true)
+    `INSERT INTO recorrencias (usuario_id, tipo, descricao, valor, dia_vencimento, categoria_id, origem, observacao, ativo)
+     VALUES ($1, 'PAGAR', $2, $3, $4, $5, $6, $7, true)
      RETURNING id`,
-    [usuarioId, conta.descricao, conta.valor, diaVencimento, conta.categoria_id || null, conta.origem || 'PF']
+    [
+      usuarioId,
+      conta.descricao,
+      conta.valor,
+      diaVencimento,
+      conta.categoria_id || null,
+      conta.origem || 'PF',
+      conta.observacao || null
+    ]
   );
   return result.rows[0].id;
 }
