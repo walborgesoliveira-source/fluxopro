@@ -1,34 +1,9 @@
 const pool = require('../database/connection');
-
-/**
- * Helper: Calcula mês, ano e data de vencimento da fatura com base na data de compra, dia de fechamento e dia de vencimento.
- */
-function calcularFatura(dataCompraStr, diaFechamento, diaVencimento, parcelasAdicionais = 0) {
-  const d = new Date(dataCompraStr + 'T00:00:00');
-  let mes = d.getMonth() + 1; // 1-12
-  let ano = d.getFullYear();
-
-  // Se o dia da compra >= dia de fechamento, entra na fatura do mês seguinte
-  if (d.getDate() >= diaFechamento) {
-    mes++;
-  }
-
-  // Adiciona as parcelas
-  mes += parcelasAdicionais;
-
-  // Ajusta caso passe de dezembro
-  while (mes > 12) {
-    mes -= 12;
-    ano++;
-  }
-
-  // Formata o vencimento: YYYY-MM-DD
-  const mesStr = mes.toString().padStart(2, '0');
-  const diaStr = diaVencimento.toString().padStart(2, '0');
-  const dataVencimento = `${ano}-${mesStr}-${diaStr}`;
-
-  return { mes, ano, dataVencimento };
-}
+const {
+  calcularFatura,
+  buscarOuCriarFatura,
+  recalcularFatura,
+} = require('../services/faturasService');
 
 const cartoesController = {
   // ==========================
@@ -96,14 +71,26 @@ const cartoesController = {
   async listarFaturas(req, res) {
     try {
       const { cartao_id } = req.query;
-      let query = 'SELECT f.*, c.nome as cartao_nome FROM faturas f JOIN cartoes c ON f.cartao_id = c.id WHERE f.usuario_id = $1';
+      let query = `
+        SELECT
+          f.*,
+          c.nome as cartao_nome,
+          c.dia_vencimento,
+          COUNT(cp.id)::integer as quantidade_lancamentos,
+          COALESCE(SUM(cp.valor), 0) as total_lancamentos
+        FROM faturas f
+        JOIN cartoes c ON f.cartao_id = c.id
+        LEFT JOIN contas_pagar cp ON cp.fatura_id = f.id
+        WHERE f.usuario_id = $1`;
       const params = [req.userId];
       
       if (cartao_id) {
         query += ' AND f.cartao_id = $2';
         params.push(cartao_id);
       }
-      query += ' ORDER BY f.ano_referencia DESC, f.mes_referencia DESC';
+      query += `
+        GROUP BY f.id, c.id, c.nome, c.dia_vencimento
+        ORDER BY f.ano_referencia DESC, f.mes_referencia DESC, c.nome ASC`;
 
       const result = await pool.query(query, params);
       res.json({ faturas: result.rows });
@@ -221,25 +208,32 @@ const cartoesController = {
       if (faturaRes.rows.length) {
         result = await client.query(
           `UPDATE faturas
-           SET valor_total = $1,
-               valor_pago = LEAST(COALESCE(valor_pago, 0), $1),
-               status = CASE
-                 WHEN LEAST(COALESCE(valor_pago, 0), $1) >= $1 AND $1 > 0 THEN 'PAGA'
-                 WHEN status = 'PAGA' THEN 'ABERTA'
-                 ELSE status
-               END
+           SET valor_informado = $1
            WHERE id = $2 AND usuario_id = $3
            RETURNING *`,
           [valorTotal, faturaRes.rows[0].id, req.userId]
         );
       } else {
         result = await client.query(
-          `INSERT INTO faturas (cartao_id, usuario_id, mes_referencia, ano_referencia, valor_total, valor_pago)
-           VALUES ($1, $2, $3, $4, $5, 0)
+          `INSERT INTO faturas (cartao_id, usuario_id, mes_referencia, ano_referencia, valor_total, valor_informado, valor_pago)
+           VALUES ($1, $2, $3, $4, $5, $5, 0)
            RETURNING *`,
           [id, req.userId, mesRef, anoRef, valorTotal]
         );
       }
+
+      const faturaRecalculada = await recalcularFatura(client, result.rows[0].id);
+      result = await client.query(
+        `UPDATE faturas
+         SET status = CASE
+           WHEN valor_total > 0 AND valor_pago >= valor_total THEN 'PAGA'
+           WHEN status = 'PAGA' THEN 'ABERTA'
+           ELSE status
+         END
+         WHERE id = $1
+         RETURNING *`,
+        [faturaRecalculada.id]
+      );
 
       await client.query('COMMIT');
       res.json({ fatura: result.rows[0], message: 'Fatura do mês salva com sucesso!' });
@@ -272,23 +266,8 @@ const cartoesController = {
         // Calcular quando essa parcela vai cair
         const { mes, ano, dataVencimento } = calcularFatura(data_compra, cartao.dia_fechamento, cartao.dia_vencimento, i);
 
-        // Encontrar ou criar a fatura
-        let faturaRes = await client.query('SELECT id FROM faturas WHERE cartao_id = $1 AND mes_referencia = $2 AND ano_referencia = $3', [cartao_id, mes, ano]);
-        let faturaId;
-
-        if (faturaRes.rows.length > 0) {
-          faturaId = faturaRes.rows[0].id;
-          // Atualiza valor da fatura
-          await client.query('UPDATE faturas SET valor_total = valor_total + $1 WHERE id = $2', [valorParcela, faturaId]);
-        } else {
-          // Cria a fatura
-          const newFatura = await client.query(
-            `INSERT INTO faturas (cartao_id, usuario_id, mes_referencia, ano_referencia, valor_total)
-             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-            [cartao_id, req.userId, mes, ano, valorParcela]
-          );
-          faturaId = newFatura.rows[0].id;
-        }
+        const fatura = await buscarOuCriarFatura(client, req.userId, cartao_id, mes, ano);
+        const faturaId = fatura.id;
 
         // Criar registro em contas a pagar vinculado à fatura
         const descParcela = qtdeParcelas > 1 ? `${descricao} (${i+1}/${qtdeParcelas})` : descricao;
@@ -299,6 +278,7 @@ const cartoesController = {
           [req.userId, categoria_id || null, cartao_id, faturaId, descParcela, valorParcela, dataVencimento, origem || 'PF', i+1, qtdeParcelas]
         );
         contasCriadas.push(cp.rows[0]);
+        await recalcularFatura(client, faturaId);
       }
 
       await client.query('COMMIT');
@@ -340,16 +320,14 @@ const cartoesController = {
       if (!contaRes.rows.length) throw new Error('Compra não encontrada.');
       const conta = contaRes.rows[0];
 
-      const diferenca = novoValor - parseFloat(conta.valor);
-
       const updConta = await client.query(`
         UPDATE contas_pagar 
         SET descricao = $1, valor = $2, categoria_id = $3, updated_at = CURRENT_TIMESTAMP
         WHERE id = $4 AND usuario_id = $5 RETURNING *
       `, [descricao, novoValor, categoria_id || null, id, req.userId]);
 
-      if (diferenca !== 0 && conta.fatura_id) {
-        await client.query('UPDATE faturas SET valor_total = valor_total + $1 WHERE id = $2', [diferenca, conta.fatura_id]);
+      if (conta.fatura_id) {
+        await recalcularFatura(client, conta.fatura_id);
       }
 
       await client.query('COMMIT');
@@ -375,7 +353,7 @@ const cartoesController = {
       await client.query('DELETE FROM contas_pagar WHERE id = $1', [id]);
 
       if (conta.fatura_id) {
-        await client.query('UPDATE faturas SET valor_total = valor_total - $1 WHERE id = $2', [conta.valor, conta.fatura_id]);
+        await recalcularFatura(client, conta.fatura_id);
       }
 
       await client.query('COMMIT');

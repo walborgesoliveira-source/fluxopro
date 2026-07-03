@@ -44,6 +44,29 @@ export async function renderCartoes(container) {
       </div>
     </div>
 
+    <div class="card" style="margin-top:1.5rem">
+      <div style="margin-bottom:1rem">
+        <h3 class="card-title" style="margin-bottom:0.25rem">Relatório de Faturas</h3>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin:0">Faturas agrupadas por cartão e competência, com os pagamentos que compõem cada total.</p>
+      </div>
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Cartão</th>
+              <th>Competência</th>
+              <th>Lançamentos</th>
+              <th>Total da fatura</th>
+              <th>Valor pago</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="relatorioFaturasBody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- MODAL: Editar Cartão -->
     <div class="modal-overlay" id="overlayEditarCartao" style="display: none;">
       <div class="modal">
@@ -201,7 +224,7 @@ export async function renderCartoes(container) {
               <table class="table">
                 <thead>
                   <tr>
-                    <th>Data Venc.</th>
+                    <th>Data</th>
                     <th>Descrição</th>
                     <th>Categoria</th>
                     <th>Valor</th>
@@ -225,6 +248,7 @@ export async function renderCartoes(container) {
   // Referências
   const cartoesContainer = document.getElementById('cartoesContainer');
   const saldoCartoesTableBody = document.getElementById('saldoCartoesTableBody');
+  const relatorioFaturasBody = document.getElementById('relatorioFaturasBody');
   const filtroCartaoFatura = document.getElementById('filtroCartaoFatura');
   
   // Modais
@@ -315,12 +339,16 @@ export async function renderCartoes(container) {
       renderCartoesList(cartoes);
       populateSelects();
       renderSaldoCartoes();
+      renderRelatorioFaturas();
     } catch (e) {
       toast('Erro ao carregar dados dos cartões.', 'error');
     }
   }
 
-  filtroCartaoFatura.addEventListener('change', renderSaldoCartoes);
+  filtroCartaoFatura.addEventListener('change', () => {
+    renderSaldoCartoes();
+    renderRelatorioFaturas();
+  });
 
   function populateSelects() {
     const compraCartao = document.getElementById('compraCartao');
@@ -504,6 +532,48 @@ export async function renderCartoes(container) {
       btn.addEventListener('click', () => {
         const cartao = cartoes.find(c => String(c.id) === String(btn.dataset.id));
         if (cartao) showFaturaMesModal(cartao);
+      });
+    });
+  }
+
+  function renderRelatorioFaturas() {
+    const filtro = filtroCartaoFatura.value;
+    const lista = filtro
+      ? faturas.filter((fatura) => String(fatura.cartao_id) === String(filtro))
+      : faturas;
+
+    if (!lista.length) {
+      relatorioFaturasBody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma fatura encontrada.</td></tr>';
+      return;
+    }
+
+    relatorioFaturasBody.innerHTML = lista.map((fatura) => {
+      const total = parseFloat(fatura.valor_total || 0);
+      const pago = parseFloat(fatura.valor_pago || 0);
+      const quantidade = Number(fatura.quantidade_lancamentos || 0);
+      return `
+        <tr>
+          <td><strong>${fatura.cartao_nome}</strong></td>
+          <td>${getMesNome(Number(fatura.mes_referencia))}/${fatura.ano_referencia}</td>
+          <td>${quantidade}</td>
+          <td style="font-weight:700;color:var(--warning)">${formatCurrency(total)}</td>
+          <td style="font-weight:700;color:var(--success)">${formatCurrency(pago)}</td>
+          <td><span class="badge ${fatura.status === 'PAGA' ? 'badge-success' : 'badge-warning'}">${fatura.status}</span></td>
+          <td style="display:flex;gap:0.35rem;flex-wrap:wrap">
+            <button class="btn btn-sm btn-secondary btn-detalhar-fatura" data-id="${fatura.id}">Ver lançamentos</button>
+            <button class="btn btn-sm btn-success btn-pagar-fatura-relatorio" data-id="${fatura.id}">Pagamento</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    document.querySelectorAll('.btn-detalhar-fatura').forEach((btn) => {
+      btn.addEventListener('click', () => window.abrirFaturaDetalhes(btn.dataset.id));
+    });
+    document.querySelectorAll('.btn-pagar-fatura-relatorio').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const fatura = faturas.find((item) => String(item.id) === String(btn.dataset.id));
+        if (fatura) showPagamentoFaturaModal(fatura);
       });
     });
   }
@@ -701,7 +771,7 @@ export async function renderCartoes(container) {
 
     tbody.innerHTML = compras.map(c => `
       <tr>
-        <td>${formatDate(c.data_vencimento)}</td>
+        <td>${formatDate(c.data_pagamento || c.data_vencimento)}</td>
         <td>${c.descricao}</td>
         <td>${c.categoria_nome || '-'}</td>
         <td style="font-weight:600; color:var(--danger)">${formatCurrency(c.valor)}</td>

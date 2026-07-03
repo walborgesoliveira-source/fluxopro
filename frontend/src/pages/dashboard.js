@@ -21,6 +21,9 @@ export async function renderDashboard(container) {
     <div class="stats-grid" id="statsGrid">
       <div class="loading-overlay"><div class="spinner"></div></div>
     </div>
+    <div class="card" id="pagamentosFinanceiros" style="margin-top:1.5rem">
+      <div class="loading-overlay"><div class="spinner"></div></div>
+    </div>
     <div class="two-col" style="margin-top:1.5rem">
       <div class="card" id="caixaPFPJ">
         <h3 style="font-size:1rem;font-weight:600;margin-bottom:1rem">Caixa por Origem</h3>
@@ -81,6 +84,60 @@ export async function renderDashboard(container) {
           <div class="stat-label">Pendente (Pagar)</div>
           <div class="stat-value" style="color:var(--warning)">${formatCurrency(resumo.contas_pagar.total_pendente)}</div>
           <div class="stat-detail">A receber: ${formatCurrency(resumo.contas_receber.total_a_receber)}</div>
+        </div>
+      `;
+
+      const pagamentos = resumo.pagamentos || {
+        conta_corrente: { total: 0, qtd: 0 },
+        cartoes: [],
+        total_cartoes: 0,
+        faturas_pagas: 0,
+      };
+      document.getElementById('pagamentosFinanceiros').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+          <div>
+            <h3 style="font-size:1rem;font-weight:600;margin:0 0 0.25rem">Pagamentos e compromissos do mês</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin:0">Baixas imediatas afetam o caixa; cartão é lançado na fatura correspondente.</p>
+          </div>
+          <span class="badge badge-info">${getMesNome(mes)} ${ano}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.75rem;margin-bottom:1rem">
+          <div style="padding:0.9rem;border-radius:0.65rem;background:var(--bg-glass)">
+            <div style="font-size:0.75rem;color:var(--text-muted)">Pagamentos imediatos</div>
+            <strong style="display:block;font-size:1.15rem;color:var(--danger);margin-top:0.25rem">${formatCurrency(pagamentos.conta_corrente.total)}</strong>
+            <small style="color:var(--text-muted)">${pagamentos.conta_corrente.qtd} contas por PIX, débito, dinheiro ou transferência</small>
+          </div>
+          <div style="padding:0.9rem;border-radius:0.65rem;background:var(--bg-glass)">
+            <div style="font-size:0.75rem;color:var(--text-muted)">Comprometido nos cartões</div>
+            <strong style="display:block;font-size:1.15rem;color:var(--warning);margin-top:0.25rem">${formatCurrency(pagamentos.total_cartoes)}</strong>
+            <small style="color:var(--text-muted)">Será pago nas faturas indicadas abaixo</small>
+          </div>
+          <div style="padding:0.9rem;border-radius:0.65rem;background:var(--bg-glass)">
+            <div style="font-size:0.75rem;color:var(--text-muted)">Faturas pagas pelo caixa</div>
+            <strong style="display:block;font-size:1.15rem;color:var(--danger);margin-top:0.25rem">${formatCurrency(pagamentos.faturas_pagas)}</strong>
+            <small style="color:var(--text-muted)">Saída efetiva para pagamento de cartões</small>
+          </div>
+          <div style="padding:0.9rem;border-radius:0.65rem;background:var(--bg-glass)">
+            <div style="font-size:0.75rem;color:var(--text-muted)">Total de saídas reais</div>
+            <strong style="display:block;font-size:1.15rem;color:var(--danger);margin-top:0.25rem">${formatCurrency(resumo.caixa.saidas)}</strong>
+            <small style="color:var(--text-muted)">Movimentações que efetivamente reduziram o caixa</small>
+          </div>
+        </div>
+        <div>
+          <h4 style="font-size:0.88rem;font-weight:600;margin:0 0 0.65rem">Compras no crédito por cartão e fatura</h4>
+          ${pagamentos.cartoes.length ? `
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.65rem">
+              ${pagamentos.cartoes.map((item) => `
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:0.75rem;border:1px solid var(--border-color);border-radius:0.6rem">
+                  <div>
+                    <strong style="font-size:0.88rem">${item.cartao_nome}</strong>
+                    <div style="font-size:0.75rem;color:var(--text-muted)">Fatura ${getMesNome(item.mes_referencia)}/${item.ano_referencia} • ${item.quantidade} lançamentos</div>
+                  </div>
+                  <strong style="color:var(--warning);white-space:nowrap">${formatCurrency(item.total)}</strong>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<div style="font-size:0.82rem;color:var(--text-muted);padding:0.75rem;background:var(--bg-glass);border-radius:0.5rem">Nenhum pagamento com cartão registrado neste mês.</div>'}
         </div>
       `;
 

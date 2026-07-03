@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS recorrencias (
   origem VARCHAR(5) DEFAULT 'PF' CHECK (origem IN ('PF', 'PJ')),
   origem_tipo VARCHAR(10) DEFAULT 'CLIENTE' CHECK (origem_tipo IN ('CLIENTE', 'SERVICO', 'OUTROS')),
   conta_bancaria_id INTEGER,
+  cartao_id INTEGER,
   observacao TEXT,
   forma_pagamento VARCHAR(30) DEFAULT 'OUTROS',
   data_inicio DATE DEFAULT CURRENT_DATE,
@@ -161,6 +162,7 @@ CREATE TABLE IF NOT EXISTS faturas (
   mes_referencia INTEGER NOT NULL,
   ano_referencia INTEGER NOT NULL,
   valor_total DECIMAL(12,2) DEFAULT 0,
+  valor_informado DECIMAL(12,2),
   valor_pago DECIMAL(12,2) DEFAULT 0,
   status VARCHAR(10) DEFAULT 'ABERTA' CHECK (status IN ('ABERTA', 'FECHADA', 'PAGA')),
   data_pagamento DATE,
@@ -177,6 +179,8 @@ CREATE INDEX IF NOT EXISTS idx_contas_receber_usuario ON contas_receber(usuario_
 CREATE INDEX IF NOT EXISTS idx_contas_receber_status ON contas_receber(status);
 CREATE INDEX IF NOT EXISTS idx_movimentacoes_usuario ON movimentacoes(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes(data_movimentacao);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_faturas_competencia
+  ON faturas(usuario_id, cartao_id, mes_referencia, ano_referencia);
 
 -- ================================================
 -- CATEGORIAS PADRÃO (inseridas apenas se a tabela está vazia)

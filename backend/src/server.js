@@ -58,6 +58,7 @@ async function runMigrations() {
       ALTER TABLE movimentacoes ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(30);
       ALTER TABLE contas_receber ADD COLUMN IF NOT EXISTS conta_bancaria_id INTEGER;
       ALTER TABLE faturas ADD COLUMN IF NOT EXISTS valor_pago DECIMAL(12,2) DEFAULT 0;
+      ALTER TABLE faturas ADD COLUMN IF NOT EXISTS valor_informado DECIMAL(12,2);
     `);
     console.log('✅ Migration: meios de pagamento e valor pago de fatura verificados.');
 
@@ -103,7 +104,11 @@ async function runMigrations() {
       ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(30) DEFAULT 'OUTROS';
       ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS origem_tipo VARCHAR(10) DEFAULT 'CLIENTE';
       ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS conta_bancaria_id INTEGER;
+      ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS cartao_id INTEGER;
       ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS data_inicio DATE DEFAULT CURRENT_DATE;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_faturas_competencia
+        ON faturas(usuario_id, cartao_id, mes_referencia, ano_referencia);
 
       CREATE TABLE IF NOT EXISTS app_migrations (
         id VARCHAR(100) PRIMARY KEY,
@@ -423,6 +428,189 @@ async function runMigrations() {
 
           INSERT INTO app_migrations (id)
           VALUES ('20260703_conciliar_recebimentos_existentes');
+        END IF;
+      END
+      $$;
+
+      DO $$
+      DECLARE
+        pagamento RECORD;
+        cartao_pagamento RECORD;
+        mes_fechamento DATE;
+        competencia DATE;
+        fatura_destino_id INTEGER;
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM app_migrations
+          WHERE id = '20260703_separar_credito_e_caixa'
+        ) THEN
+          UPDATE faturas
+          SET valor_informado = valor_total
+          WHERE valor_informado IS NULL;
+
+          UPDATE contas_pagar cp
+          SET cartao_id = c.id
+          FROM cartoes c
+          WHERE cp.usuario_id = c.usuario_id
+            AND cp.cartao_id IS NULL
+            AND (
+              (cp.forma_pagamento = 'CREDITO_BRADESCO' AND c.nome ILIKE '%Bradesco%')
+              OR
+              (cp.forma_pagamento = 'CREDITO_SANTANDER' AND c.nome ILIKE '%Santander%')
+            );
+
+          UPDATE recorrencias r
+          SET cartao_id = c.id,
+              forma_pagamento = 'CARTAO_CREDITO'
+          FROM cartoes c
+          WHERE r.usuario_id = c.usuario_id
+            AND (
+              (r.forma_pagamento = 'CREDITO_BRADESCO' AND c.nome ILIKE '%Bradesco%')
+              OR
+              (r.forma_pagamento = 'CREDITO_SANTANDER' AND c.nome ILIKE '%Santander%')
+            );
+
+          FOR pagamento IN
+            SELECT cp.*
+            FROM contas_pagar cp
+            WHERE cp.status = 'PAGO'
+              AND cp.cartao_id IS NOT NULL
+              AND cp.fatura_id IS NULL
+              AND cp.forma_pagamento IN (
+                'CREDITO_BRADESCO',
+                'CREDITO_SANTANDER',
+                'CARTAO_CREDITO'
+              )
+            ORDER BY cp.usuario_id, cp.data_pagamento, cp.id
+          LOOP
+            SELECT id, dia_fechamento, dia_vencimento
+            INTO cartao_pagamento
+            FROM cartoes
+            WHERE id = pagamento.cartao_id
+              AND usuario_id = pagamento.usuario_id;
+
+            IF FOUND THEN
+              mes_fechamento := DATE_TRUNC(
+                'month',
+                COALESCE(pagamento.data_pagamento, pagamento.data_vencimento)
+              )::DATE;
+
+              IF EXTRACT(DAY FROM COALESCE(pagamento.data_pagamento, pagamento.data_vencimento))
+                   >= cartao_pagamento.dia_fechamento THEN
+                mes_fechamento := (mes_fechamento + INTERVAL '1 month')::DATE;
+              END IF;
+
+              competencia := mes_fechamento;
+              IF cartao_pagamento.dia_vencimento <= cartao_pagamento.dia_fechamento THEN
+                competencia := (competencia + INTERVAL '1 month')::DATE;
+              END IF;
+
+              INSERT INTO faturas (
+                cartao_id, usuario_id, mes_referencia, ano_referencia,
+                valor_total, valor_pago
+              )
+              VALUES (
+                cartao_pagamento.id,
+                pagamento.usuario_id,
+                EXTRACT(MONTH FROM competencia)::INTEGER,
+                EXTRACT(YEAR FROM competencia)::INTEGER,
+                0,
+                0
+              )
+              ON CONFLICT (usuario_id, cartao_id, mes_referencia, ano_referencia)
+              DO UPDATE SET cartao_id = EXCLUDED.cartao_id
+              RETURNING id INTO fatura_destino_id;
+
+              UPDATE contas_pagar
+              SET cartao_id = cartao_pagamento.id,
+                  fatura_id = fatura_destino_id,
+                  forma_pagamento = 'CARTAO_CREDITO',
+                  data_pagamento = COALESCE(data_pagamento, data_vencimento),
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = pagamento.id;
+
+              DELETE FROM movimentacoes
+              WHERE usuario_id = pagamento.usuario_id
+                AND referencia_tipo = 'CONTA_PAGAR'
+                AND referencia_id = pagamento.id;
+            END IF;
+          END LOOP;
+
+          UPDATE contas_pagar
+          SET forma_pagamento = 'CARTAO_CREDITO',
+              updated_at = CURRENT_TIMESTAMP
+          WHERE cartao_id IS NOT NULL
+            AND forma_pagamento IN ('CREDITO_BRADESCO', 'CREDITO_SANTANDER');
+
+          UPDATE faturas f
+          SET valor_total = GREATEST(
+            COALESCE(f.valor_informado, 0),
+            COALESCE((
+              SELECT SUM(cp.valor)
+              FROM contas_pagar cp
+              WHERE cp.fatura_id = f.id
+            ), 0)
+          ),
+          valor_pago = LEAST(
+            COALESCE(f.valor_pago, 0),
+            GREATEST(
+              COALESCE(f.valor_informado, 0),
+              COALESCE((
+                SELECT SUM(cp.valor)
+                FROM contas_pagar cp
+                WHERE cp.fatura_id = f.id
+              ), 0)
+            )
+          );
+
+          INSERT INTO app_migrations (id)
+          VALUES ('20260703_separar_credito_e_caixa');
+        END IF;
+      END
+      $$;
+
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM app_migrations
+          WHERE id = '20260703_datas_pagamentos_credito'
+        ) THEN
+          UPDATE contas_pagar
+          SET data_pagamento = data_vencimento,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE status = 'PAGO'
+            AND cartao_id IS NOT NULL
+            AND data_pagamento IS NULL;
+
+          INSERT INTO app_migrations (id)
+          VALUES ('20260703_datas_pagamentos_credito');
+        END IF;
+      END
+      $$;
+
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM app_migrations
+          WHERE id = '20260703_datas_pagamentos_restantes'
+        ) THEN
+          UPDATE contas_pagar cp
+          SET data_pagamento = COALESCE(
+                (
+                  SELECT MAX(m.data_movimentacao)
+                  FROM movimentacoes m
+                  WHERE m.usuario_id = cp.usuario_id
+                    AND m.referencia_tipo = 'CONTA_PAGAR'
+                    AND m.referencia_id = cp.id
+                ),
+                cp.data_vencimento
+              ),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE cp.status = 'PAGO'
+            AND cp.data_pagamento IS NULL;
+
+          INSERT INTO app_migrations (id)
+          VALUES ('20260703_datas_pagamentos_restantes');
         END IF;
       END
       $$;

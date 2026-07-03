@@ -3,18 +3,21 @@ import { formatCurrency, formatDate, getMesNome, todayISO } from '../services/ut
 import { toast } from '../components/toast.js';
 
 const FORMAS_PAGAMENTO = [
-  { value: 'CREDITO_BRADESCO', label: 'Crédito Bradesco', icon: '💳' },
-  { value: 'CREDITO_SANTANDER', label: 'Crédito Santander', icon: '💳' },
   { value: 'DEBITO_BRADESCO', label: 'Débito Bradesco', icon: '🏦' },
   { value: 'DEBITO_SANTANDER', label: 'Débito Santander', icon: '🏦' },
   { value: 'DEBITO_CREFISA', label: 'Débito Crefisa', icon: '🏦' },
   { value: 'PIX_BRADESCO', label: 'PIX Bradesco', icon: '📲' },
   { value: 'PIX_SANTANDER', label: 'PIX Santander', icon: '📲' },
   { value: 'PIX_CREFISA', label: 'PIX Crefisa', icon: '📲' },
+  { value: 'DINHEIRO', label: 'Dinheiro', icon: '💵' },
+  { value: 'TRANSFERENCIA', label: 'Transferência', icon: '🏦' },
   { value: 'OUTROS', label: 'Outros', icon: '•' },
 ];
 
-function getFormaPagamento(forma) {
+function getFormaPagamento(forma, cartaoNome = '') {
+  if (forma === 'CARTAO_CREDITO' || forma?.startsWith('CREDITO_')) {
+    return { value: forma, label: cartaoNome || 'Cartão de crédito', icon: '💳' };
+  }
   return FORMAS_PAGAMENTO.find((f) => f.value === forma) || { value: forma, label: forma || 'Outros', icon: '•' };
 }
 
@@ -23,6 +26,7 @@ export async function renderContasPagar(container) {
   let mes = now.getMonth() + 1;
   let ano = now.getFullYear();
   let categorias = [];
+  let cartoes = [];
 
   container.innerHTML = `
     <div class="page-header">
@@ -66,6 +70,10 @@ export async function renderContasPagar(container) {
     try { const d = await api.listarCategorias('DESPESA'); categorias = d.categorias || []; } catch(e) { categorias = []; }
   }
 
+  async function loadCartoes() {
+    try { const d = await api.listarCartoes(); cartoes = (d.cartoes || []).filter((c) => c.ativo !== false); } catch(e) { cartoes = []; }
+  }
+
   async function loadData() {
     document.getElementById('currentMonth').textContent = `${getMesNome(mes)} ${ano}`;
     const s = document.getElementById('filterStatus').value;
@@ -95,7 +103,11 @@ export async function renderContasPagar(container) {
               <td>${formatDate(c.data_vencimento)}</td>
               <td><span class="badge badge-info">${c.tipo}</span></td>
               <td><span class="badge ${c.recorrente ? 'badge-success' : 'badge-info'}">${c.recorrente ? 'SIM' : 'NÃO'}</span></td>
-              <td>${getFormaPagamento(c.forma_pagamento).icon} ${getFormaPagamento(c.forma_pagamento).label}</td>
+              <td>
+                ${getFormaPagamento(c.forma_pagamento, c.cartao_nome).icon}
+                ${getFormaPagamento(c.forma_pagamento, c.cartao_nome).label}
+                ${c.fatura_mes ? `<br><small style="color:var(--text-muted)">Fatura ${getMesNome(Number(c.fatura_mes))}/${c.fatura_ano}</small>` : ''}
+              </td>
               <td><span class="badge badge-${c.origem.toLowerCase()}">${c.origem}</span></td>
               <td><span class="badge ${c.status === 'PAGO' ? 'badge-success' : 'badge-warning'}">${c.status}</span></td>
               <td>
@@ -143,10 +155,28 @@ export async function renderContasPagar(container) {
     }
   }
 
-  function formaPagamentoOptions(selected = 'OUTROS') {
-    return FORMAS_PAGAMENTO.map((forma) => (
+  function formaPagamentoOptions(selected = 'OUTROS', cartaoId = '') {
+    const formasImediatas = FORMAS_PAGAMENTO.map((forma) => (
       `<option value="${forma.value}" ${selected === forma.value ? 'selected' : ''}>${forma.label}</option>`
     )).join('');
+    const cartoesOptions = cartoes.map((cartao) => (
+      `<option value="CARTAO:${cartao.id}" ${
+        (selected === 'CARTAO_CREDITO' || selected?.startsWith('CREDITO_'))
+          && String(cartaoId) === String(cartao.id) ? 'selected' : ''
+      }>Cartão de crédito — ${cartao.nome}</option>`
+    )).join('');
+    return `${formasImediatas}${cartoesOptions ? `<optgroup label="Cartões cadastrados">${cartoesOptions}</optgroup>` : ''}`;
+  }
+
+  function dadosFormaPagamento(selectId) {
+    const valor = document.getElementById(selectId).value;
+    if (valor.startsWith('CARTAO:')) {
+      return {
+        forma_pagamento: 'CARTAO_CREDITO',
+        cartao_id: Number(valor.split(':')[1]),
+      };
+    }
+    return { forma_pagamento: valor, cartao_id: null };
   }
 
   function showModal(conta = null) {
@@ -166,7 +196,7 @@ export async function renderContasPagar(container) {
               </div>
               <div class="two-col">
                 <div class="form-group"><label>Tipo</label><select class="form-select" id="tipo"><option value="VARIAVEL" ${conta?.tipo==='VARIAVEL'?'selected':''}>Variável</option><option value="FIXA" ${conta?.tipo==='FIXA'?'selected':''}>Fixa</option></select></div>
-                <div class="form-group"><label>Forma Pgto</label><select class="form-select" id="forma_pagamento">${formaPagamentoOptions(conta?.forma_pagamento || 'OUTROS')}</select></div>
+                <div class="form-group"><label>Forma Pgto</label><select class="form-select" id="forma_pagamento">${formaPagamentoOptions(conta?.forma_pagamento || 'OUTROS', conta?.cartao_id || '')}</select></div>
               </div>
               <div class="two-col">
                 <div class="form-group"><label>Origem</label><select class="form-select" id="origem"><option value="PF" ${conta?.origem==='PF'?'selected':''}>Pessoa Física</option><option value="PJ" ${conta?.origem==='PJ'?'selected':''}>Pessoa Jurídica</option></select></div>
@@ -199,7 +229,7 @@ export async function renderContasPagar(container) {
           valor: parseFloat(document.getElementById('valor').value),
           data_vencimento: document.getElementById('data_vencimento').value,
           tipo: document.getElementById('tipo').value,
-          forma_pagamento: document.getElementById('forma_pagamento').value,
+          ...dadosFormaPagamento('forma_pagamento'),
           origem: document.getElementById('origem').value,
           categoria_id: document.getElementById('categoria_id').value || null,
           recorrente: document.getElementById('recorrente').checked,
@@ -238,7 +268,7 @@ export async function renderContasPagar(container) {
               </div>
               <div class="form-group">
                 <label>Forma de pagamento</label>
-                <select class="form-select" id="pagamento_forma" required>${formaPagamentoOptions(conta.forma_pagamento || 'OUTROS')}</select>
+                <select class="form-select" id="pagamento_forma" required>${formaPagamentoOptions(conta.forma_pagamento || 'OUTROS', conta.cartao_id || '')}</select>
               </div>
               <div class="form-group">
                 <label>Data do pagamento</label>
@@ -261,7 +291,7 @@ export async function renderContasPagar(container) {
       try {
         await api.atualizarPagar(conta.id, {
           status: 'PAGO',
-          forma_pagamento: document.getElementById('pagamento_forma').value,
+          ...dadosFormaPagamento('pagamento_forma'),
           data_pagamento: document.getElementById('pagamento_data').value,
         });
         toast('Conta marcada como paga!', 'success');
@@ -288,5 +318,6 @@ export async function renderContasPagar(container) {
   });
 
   await loadCategorias();
+  await loadCartoes();
   loadData();
 }

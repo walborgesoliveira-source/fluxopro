@@ -325,8 +325,9 @@ const recorrenciasController = {
           if (jaExiste.rows.length === 0) {
             await client.query(
               `INSERT INTO contas_pagar
-                 (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo, forma_pagamento, origem, observacao, recorrencia_id, recorrente)
-               VALUES ($1, $2, $3, $4, $5, 'FIXA', $6, $7, $8, $9, true)`,
+                 (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo,
+                  forma_pagamento, origem, observacao, recorrencia_id, recorrente, cartao_id)
+               VALUES ($1, $2, $3, $4, $5, 'FIXA', $6, $7, $8, $9, true, $10)`,
               [
                 req.userId,
                 rec.categoria_id,
@@ -336,7 +337,8 @@ const recorrenciasController = {
                 rec.forma_pagamento || 'OUTROS',
                 rec.origem,
                 rec.observacao,
-                rec.id
+                rec.id,
+                rec.cartao_id || null
               ]
             );
             criadas++;
