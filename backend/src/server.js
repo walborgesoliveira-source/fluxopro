@@ -101,11 +101,49 @@ async function runMigrations() {
     await pool.query(`
       ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS observacao TEXT;
       ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(30) DEFAULT 'OUTROS';
+      ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS origem_tipo VARCHAR(10) DEFAULT 'CLIENTE';
+      ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS conta_bancaria_id INTEGER;
+      ALTER TABLE recorrencias ADD COLUMN IF NOT EXISTS data_inicio DATE DEFAULT CURRENT_DATE;
 
       CREATE TABLE IF NOT EXISTS app_migrations (
         id VARCHAR(100) PRIMARY KEY,
         applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM app_migrations
+          WHERE id = '20260703_data_inicio_recorrencias_existentes'
+        ) THEN
+          UPDATE recorrencias r
+          SET data_inicio = LEAST(
+            COALESCE(r.data_inicio, r.created_at::date),
+            r.created_at::date,
+            COALESCE(
+              (
+                SELECT MIN(conta.data_vencimento)
+                FROM (
+                  SELECT cp.data_vencimento
+                  FROM contas_pagar cp
+                  WHERE cp.recorrencia_id = r.id
+
+                  UNION ALL
+
+                  SELECT cr.data_vencimento
+                  FROM contas_receber cr
+                  WHERE cr.recorrencia_id = r.id
+                ) conta
+              ),
+              r.created_at::date
+            )
+          );
+
+          INSERT INTO app_migrations (id)
+          VALUES ('20260703_data_inicio_recorrencias_existentes');
+        END IF;
+      END
+      $$;
 
       DO $$
       BEGIN
@@ -243,6 +281,148 @@ async function runMigrations() {
 
           INSERT INTO app_migrations (id)
           VALUES ('20260701_rebase_metadados_recorrencias_maio');
+        END IF;
+      END
+      $$;
+
+      DO $$
+      DECLARE
+        conta_maio RECORD;
+        nova_recorrencia_id INTEGER;
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM app_migrations
+          WHERE id = '20260703_contas_receber_recorrentes_desde_maio'
+        ) THEN
+          FOR conta_maio IN
+            SELECT *
+            FROM contas_receber
+            WHERE data_vencimento >= DATE '2026-05-01'
+              AND data_vencimento < DATE '2026-06-01'
+            ORDER BY usuario_id, data_vencimento, id
+          LOOP
+            IF conta_maio.recorrencia_id IS NULL THEN
+              INSERT INTO recorrencias (
+                usuario_id, tipo, descricao, valor, dia_vencimento, categoria_id,
+                origem, origem_tipo, conta_bancaria_id, observacao, data_inicio, ativo
+              )
+              VALUES (
+                conta_maio.usuario_id, 'RECEBER', conta_maio.descricao, conta_maio.valor,
+                EXTRACT(DAY FROM conta_maio.data_vencimento)::INTEGER,
+                conta_maio.categoria_id, conta_maio.origem, conta_maio.origem_tipo,
+                conta_maio.conta_bancaria_id, conta_maio.observacao, DATE '2026-05-01', true
+              )
+              RETURNING id INTO nova_recorrencia_id;
+
+              UPDATE contas_receber
+              SET recorrencia_id = nova_recorrencia_id,
+                  tipo = 'RECORRENTE',
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = conta_maio.id;
+
+              UPDATE contas_receber
+              SET recorrencia_id = nova_recorrencia_id,
+                  tipo = 'RECORRENTE',
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE usuario_id = conta_maio.usuario_id
+                AND recorrencia_id IS NULL
+                AND (
+                  LOWER(BTRIM(descricao)) = LOWER(BTRIM(conta_maio.descricao))
+                  OR LOWER(BTRIM(conta_maio.descricao)) LIKE LOWER(BTRIM(descricao)) || '%'
+                  OR LOWER(BTRIM(descricao)) LIKE LOWER(BTRIM(conta_maio.descricao)) || '%'
+                )
+                AND data_vencimento >= DATE '2026-06-01';
+            END IF;
+          END LOOP;
+
+          INSERT INTO contas_receber (
+            usuario_id, categoria_id, descricao, valor, data_vencimento, tipo,
+            status, origem_tipo, origem, conta_bancaria_id, observacao, recorrencia_id
+          )
+          SELECT
+            r.usuario_id,
+            r.categoria_id,
+            r.descricao,
+            r.valor,
+            make_date(
+              EXTRACT(YEAR FROM mes_ref)::INTEGER,
+              EXTRACT(MONTH FROM mes_ref)::INTEGER,
+              LEAST(
+                r.dia_vencimento,
+                EXTRACT(DAY FROM (mes_ref + INTERVAL '1 month - 1 day'))::INTEGER
+              )
+            ),
+            'RECORRENTE',
+            'A_RECEBER',
+            COALESCE(r.origem_tipo, 'CLIENTE'),
+            r.origem,
+            r.conta_bancaria_id,
+            r.observacao,
+            r.id
+          FROM recorrencias r
+          CROSS JOIN generate_series(
+            DATE '2026-06-01',
+            DATE '2026-12-01',
+            INTERVAL '1 month'
+          ) AS mes_ref
+          WHERE r.tipo = 'RECEBER'
+            AND r.ativo = true
+            AND r.data_inicio <= (mes_ref + INTERVAL '1 month - 1 day')::DATE
+            AND NOT EXISTS (
+              SELECT 1
+              FROM contas_receber cr
+              WHERE cr.recorrencia_id = r.id
+                AND DATE_TRUNC('month', cr.data_vencimento) = mes_ref
+            );
+
+          INSERT INTO app_migrations (id)
+          VALUES ('20260703_contas_receber_recorrentes_desde_maio');
+        END IF;
+      END
+      $$;
+
+      DO $$
+      DECLARE
+        correspondencia RECORD;
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM app_migrations
+          WHERE id = '20260703_conciliar_recebimentos_existentes'
+        ) THEN
+          FOR correspondencia IN
+            SELECT DISTINCT ON (cr.id)
+              cr.id AS conta_id,
+              cr.data_vencimento,
+              r.id AS recorrencia_id
+            FROM contas_receber cr
+            JOIN recorrencias r
+              ON r.usuario_id = cr.usuario_id
+             AND r.tipo = 'RECEBER'
+             AND r.data_inicio = DATE '2026-05-01'
+             AND (
+               LOWER(BTRIM(r.descricao)) = LOWER(BTRIM(cr.descricao))
+               OR LOWER(BTRIM(r.descricao)) LIKE LOWER(BTRIM(cr.descricao)) || '%'
+               OR LOWER(BTRIM(cr.descricao)) LIKE LOWER(BTRIM(r.descricao)) || '%'
+             )
+            WHERE cr.recorrencia_id IS NULL
+              AND cr.data_vencimento >= DATE '2026-06-01'
+            ORDER BY cr.id, r.id
+          LOOP
+            DELETE FROM contas_receber
+            WHERE recorrencia_id = correspondencia.recorrencia_id
+              AND DATE_TRUNC('month', data_vencimento) =
+                  DATE_TRUNC('month', correspondencia.data_vencimento)
+              AND id <> correspondencia.conta_id;
+
+            UPDATE contas_receber
+            SET recorrencia_id = correspondencia.recorrencia_id,
+                tipo = 'RECORRENTE',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = correspondencia.conta_id;
+          END LOOP;
+
+          INSERT INTO app_migrations (id)
+          VALUES ('20260703_conciliar_recebimentos_existentes');
         END IF;
       END
       $$;

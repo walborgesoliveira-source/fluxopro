@@ -57,6 +57,7 @@ export async function renderContasReceber(container) {
     const params = `mes=${mes}&ano=${ano}${s?'&status='+s:''}${o?'&origem='+o:''}`;
 
     try {
+      await api.gerarRecorrenciasMensal(mes, ano, 'RECEBER');
       const data = await api.listarReceber(params);
       const contas = data.contas || [];
 

@@ -99,7 +99,7 @@ const api = {
   criarRecorrencia: (dados) => request('POST', '/recorrencias', dados),
   atualizarRecorrencia: (id, dados) => request('PUT', `/recorrencias/${id}`, dados),
   excluirRecorrencia: (id) => request('DELETE', `/recorrencias/${id}`),
-  gerarRecorrenciasMensal: (mes, ano) => request('POST', '/recorrencias/gerar', { mes, ano }),
+  gerarRecorrenciasMensal: (mes, ano, tipo = '') => request('POST', '/recorrencias/gerar', { mes, ano, tipo: tipo || undefined }),
   marcarRecorrenciaPaga: (id, dados) => request('POST', `/recorrencias/${id}/pagar`, dados),
   marcarRecorrenciaPendente: (id, dados) => request('POST', `/recorrencias/${id}/despagar`, dados),
 

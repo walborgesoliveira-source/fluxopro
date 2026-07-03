@@ -287,12 +287,26 @@ const recorrenciasController = {
   async gerarMensal(req, res) {
     const client = await pool.connect();
     try {
-      const { mes, ano } = req.body;
+      const { mes, ano, tipo } = req.body;
       if (!mes || !ano) return res.status(400).json({ error: 'Mês e ano são obrigatórios.' });
+      if (tipo && !['PAGAR', 'RECEBER'].includes(tipo)) {
+        return res.status(400).json({ error: 'Tipo de recorrência inválido.' });
+      }
 
       await client.query('BEGIN');
 
-      const resRecorrencias = await client.query('SELECT * FROM recorrencias WHERE usuario_id = $1 AND ativo = true', [req.userId]);
+      const inicioMes = `${ano}-${String(mes).padStart(2, '0')}-01`;
+      const params = [req.userId, inicioMes];
+      let query = `SELECT *
+        FROM recorrencias
+        WHERE usuario_id = $1
+          AND ativo = true
+          AND COALESCE(data_inicio, created_at::date) <= ($2::date + INTERVAL '1 month - 1 day')::date`;
+      if (tipo) {
+        params.push(tipo);
+        query += ` AND tipo = $3`;
+      }
+      const resRecorrencias = await client.query(query, params);
       const recorrencias = resRecorrencias.rows;
       let criadas = 0;
 
@@ -336,9 +350,21 @@ const recorrenciasController = {
           if (jaExiste.rows.length === 0) {
             await client.query(
               `INSERT INTO contas_receber
-                 (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo, origem, observacao, recorrencia_id)
-               VALUES ($1, $2, $3, $4, $5, 'RECORRENTE', $6, $7, $8)`,
-              [req.userId, rec.categoria_id, rec.descricao, rec.valor, dataVencimento, rec.origem, rec.observacao, rec.id]
+                 (usuario_id, categoria_id, descricao, valor, data_vencimento, tipo,
+                  origem_tipo, origem, conta_bancaria_id, observacao, recorrencia_id)
+               VALUES ($1, $2, $3, $4, $5, 'RECORRENTE', $6, $7, $8, $9, $10)`,
+              [
+                req.userId,
+                rec.categoria_id,
+                rec.descricao,
+                rec.valor,
+                dataVencimento,
+                rec.origem_tipo || 'CLIENTE',
+                rec.origem,
+                rec.conta_bancaria_id,
+                rec.observacao,
+                rec.id
+              ]
             );
             criadas++;
           }

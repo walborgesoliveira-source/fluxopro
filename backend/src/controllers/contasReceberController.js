@@ -28,6 +28,73 @@ async function resolverContaBancaria(client, usuarioId, contaBancariaId) {
   return contaRes.rows[0]?.id || null;
 }
 
+async function sincronizarRecorrenciaContaReceber(client, usuarioId, conta) {
+  if (conta.tipo !== 'RECORRENTE') {
+    if (conta.recorrencia_id) {
+      await client.query(
+        'UPDATE recorrencias SET ativo = false WHERE id = $1 AND usuario_id = $2',
+        [conta.recorrencia_id, usuarioId]
+      );
+    }
+    return null;
+  }
+
+  const vencimento = new Date(conta.data_vencimento);
+  const diaVencimento = vencimento.getUTCDate();
+  const dataInicio = `${vencimento.getUTCFullYear()}-${String(vencimento.getUTCMonth() + 1).padStart(2, '0')}-01`;
+
+  if (conta.recorrencia_id) {
+    await client.query(
+      `UPDATE recorrencias
+       SET descricao = $1,
+           valor = $2,
+           dia_vencimento = $3,
+           categoria_id = $4,
+           origem = $5,
+           origem_tipo = $6,
+           conta_bancaria_id = $7,
+           observacao = $8,
+           ativo = true
+       WHERE id = $9 AND usuario_id = $10`,
+      [
+        conta.descricao,
+        conta.valor,
+        diaVencimento,
+        conta.categoria_id || null,
+        conta.origem || 'PF',
+        conta.origem_tipo || 'CLIENTE',
+        conta.conta_bancaria_id || null,
+        conta.observacao || null,
+        conta.recorrencia_id,
+        usuarioId,
+      ]
+    );
+    return conta.recorrencia_id;
+  }
+
+  const result = await client.query(
+    `INSERT INTO recorrencias (
+       usuario_id, tipo, descricao, valor, dia_vencimento, categoria_id,
+       origem, origem_tipo, conta_bancaria_id, observacao, data_inicio, ativo
+     )
+     VALUES ($1, 'RECEBER', $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+     RETURNING id`,
+    [
+      usuarioId,
+      conta.descricao,
+      conta.valor,
+      diaVencimento,
+      conta.categoria_id || null,
+      conta.origem || 'PF',
+      conta.origem_tipo || 'CLIENTE',
+      conta.conta_bancaria_id || null,
+      conta.observacao || null,
+      dataInicio,
+    ]
+  );
+  return result.rows[0].id;
+}
+
 const contasReceberController = {
   async listar(req, res) {
     try {
@@ -52,9 +119,11 @@ const contasReceberController = {
   async criar(req, res) {
     const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       const { descricao, valor, data_vencimento, tipo, origem_tipo, origem, categoria_id, observacao, conta_bancaria_id } = req.body;
       const contaBancariaId = await resolverContaBancaria(client, req.userId, conta_bancaria_id);
       if (conta_bancaria_id && !contaBancariaId) {
+        await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Conta de depósito inválida.' });
       }
 
@@ -63,8 +132,23 @@ const contasReceberController = {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
         [req.userId, descricao, valor, data_vencimento, tipo, origem_tipo||'CLIENTE', origem||'PF', categoria_id, observacao, contaBancariaId]
       );
-      res.status(201).json({ conta: result.rows[0], message: 'Conta a receber criada!' });
-    } catch (e) { console.error(e); res.status(500).json({ error: 'Erro interno.' }); }
+      let conta = result.rows[0];
+      const recorrenciaId = await sincronizarRecorrenciaContaReceber(client, req.userId, conta);
+      if (recorrenciaId) {
+        const atualizada = await client.query(
+          'UPDATE contas_receber SET recorrencia_id = $1 WHERE id = $2 RETURNING *',
+          [recorrenciaId, conta.id]
+        );
+        conta = atualizada.rows[0];
+      }
+
+      await client.query('COMMIT');
+      res.status(201).json({ conta, message: 'Conta a receber criada!' });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      console.error(e);
+      res.status(500).json({ error: 'Erro interno.' });
+    }
     finally { client.release(); }
   },
 
@@ -74,6 +158,7 @@ const contasReceberController = {
       await client.query('BEGIN');
       const { id } = req.params;
       const { descricao, valor, data_vencimento, tipo, status, origem_tipo, origem, categoria_id, observacao, data_recebimento, conta_bancaria_id } = req.body;
+      const alterarDataRecebimento = Object.prototype.hasOwnProperty.call(req.body, 'data_recebimento');
 
       const anteriorRes = await client.query(
         'SELECT * FROM contas_receber WHERE id = $1 AND usuario_id = $2 FOR UPDATE',
@@ -98,13 +183,38 @@ const contasReceberController = {
         `UPDATE contas_receber SET descricao=COALESCE($1,descricao), valor=COALESCE($2,valor),
          data_vencimento=COALESCE($3,data_vencimento), tipo=COALESCE($4,tipo), status=COALESCE($5,status),
          origem_tipo=COALESCE($6,origem_tipo), origem=COALESCE($7,origem), categoria_id=COALESCE($8,categoria_id),
-         observacao=COALESCE($9,observacao), data_recebimento=$10, conta_bancaria_id=COALESCE($11,conta_bancaria_id),
+         observacao=COALESCE($9,observacao),
+         data_recebimento=CASE WHEN $10::boolean THEN $11::date ELSE data_recebimento END,
+         conta_bancaria_id=COALESCE($12,conta_bancaria_id),
          updated_at=CURRENT_TIMESTAMP
-         WHERE id=$12 AND usuario_id=$13 RETURNING *`,
-        [descricao, valor, data_vencimento, tipo, status, origem_tipo, origem, categoria_id, observacao, data_recebimento, contaBancariaId, id, req.userId]
+         WHERE id=$13 AND usuario_id=$14 RETURNING *`,
+        [
+          descricao,
+          valor,
+          data_vencimento,
+          tipo,
+          status,
+          origem_tipo,
+          origem,
+          categoria_id,
+          observacao,
+          alterarDataRecebimento,
+          data_recebimento || null,
+          contaBancariaId,
+          id,
+          req.userId,
+        ]
       );
 
-      const contaAtualizada = result.rows[0];
+      let contaAtualizada = result.rows[0];
+      const recorrenciaId = await sincronizarRecorrenciaContaReceber(client, req.userId, contaAtualizada);
+      if (recorrenciaId && recorrenciaId !== contaAtualizada.recorrencia_id) {
+        const atualizada = await client.query(
+          'UPDATE contas_receber SET recorrencia_id = $1 WHERE id = $2 AND usuario_id = $3 RETURNING *',
+          [recorrenciaId, id, req.userId]
+        );
+        contaAtualizada = atualizada.rows[0];
+      }
       const deveSincronizarRecebimento = contaAtualizada.status === 'RECEBIDO'
         && (anterior.status !== 'RECEBIDO' || String(anterior.conta_bancaria_id || '') !== String(contaAtualizada.conta_bancaria_id || ''));
       if (deveSincronizarRecebimento) {
@@ -122,7 +232,15 @@ const contasReceberController = {
         await client.query(
           `INSERT INTO movimentacoes (usuario_id,conta_bancaria_id,tipo,valor,descricao,origem,referencia_tipo,referencia_id,data_movimentacao)
            VALUES ($1,$2,'ENTRADA',$3,$4,$5,'CONTA_RECEBER',$6,COALESCE($7,CURRENT_DATE))`,
-          [req.userId, contaAtualizada.conta_bancaria_id, contaAtualizada.valor, contaAtualizada.descricao, contaAtualizada.origem, id, data_recebimento]
+          [
+            req.userId,
+            contaAtualizada.conta_bancaria_id,
+            contaAtualizada.valor,
+            contaAtualizada.descricao,
+            contaAtualizada.origem,
+            id,
+            contaAtualizada.data_recebimento,
+          ]
         );
       }
 
