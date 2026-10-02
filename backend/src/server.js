@@ -627,6 +627,11 @@ app.listen(PORT, async () => {
   console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 http://localhost:${PORT}\n`);
   await runMigrations();
+  try {
+    await require('./jobs/dailyPaymentNotificationJob').startDailyPaymentNotificationJob({ pool });
+  } catch {
+    console.error('[ERROR] Aviso diário não iniciado: verifique configuração SMTP, horário e banco.');
+  }
 });
 
 module.exports = app;

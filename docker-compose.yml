@@ -43,6 +43,16 @@ services:
       DB_PASSWORD: fluxopro_secret_2026
       JWT_SECRET: fluxopro_jwt_super_secret_key_2026
       JWT_EXPIRES_IN: 7d
+      TZ: ${TZ:-America/Sao_Paulo}
+      DAILY_PAYMENT_NOTIFICATION_ENABLED: ${DAILY_PAYMENT_NOTIFICATION_ENABLED:-false}
+      DAILY_PAYMENT_NOTIFICATION_TIME: ${DAILY_PAYMENT_NOTIFICATION_TIME:-08:00}
+      DAILY_PAYMENT_NOTIFICATION_EMAIL: ${DAILY_PAYMENT_NOTIFICATION_EMAIL:-waldirborges@iaguru.com.br}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
     depends_on:
       db:
         condition: service_healthy

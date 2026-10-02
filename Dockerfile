@@ -13,6 +13,7 @@ COPY backend/package*.json ./
 RUN npm install --omit=dev
 
 COPY backend/src ./src
+COPY backend/scripts ./scripts
 COPY --from=builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 3000

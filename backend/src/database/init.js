@@ -208,6 +208,7 @@ async function initDatabase() {
   try {
     console.log('🔄 Iniciando criação das tabelas...');
     await pool.query(initSQL);
+    await pool.query(require('./notificationSchema'));
     console.log('✅ Banco de dados inicializado com sucesso!');
     console.log('📊 Tabelas criadas: usuarios, categorias, contas_pagar, contas_receber, movimentacoes, recorrencias, cartoes, faturas');
   } catch (error) {
