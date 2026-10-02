@@ -126,7 +126,11 @@ export async function renderContasReceber(container) {
 
       document.querySelectorAll('[data-excluir]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!confirm('Excluir esta conta?')) return;
+          const conta = contas.find(c => String(c.id) === btn.dataset.excluir);
+          const mensagem = conta?.recorrencia_id
+            ? 'Excluir esta conta apenas neste mês? A recorrência dos outros meses será mantida.'
+            : 'Excluir esta conta?';
+          if (!confirm(mensagem)) return;
           try { await api.excluirReceber(btn.dataset.excluir); toast('Excluída!','success'); loadData(); }
           catch(e) { toast(e.message,'error'); }
         });

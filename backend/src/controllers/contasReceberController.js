@@ -256,12 +256,45 @@ const contasReceberController = {
   },
 
   async excluir(req, res) {
+    const client = await pool.connect();
     try {
       const { id } = req.params;
-      const result = await pool.query('DELETE FROM contas_receber WHERE id=$1 AND usuario_id=$2 RETURNING id', [id, req.userId]);
-      if (!result.rows.length) return res.status(404).json({ error: 'Conta não encontrada.' });
+      await client.query('BEGIN');
+      // The monthly generator takes the same lock before inspecting occurrences.
+      // Lock the series before deleting to prevent a concurrent regeneration.
+      await client.query(
+        `SELECT r.id FROM recorrencias r
+         JOIN contas_receber cr ON cr.recorrencia_id = r.id
+         WHERE cr.id = $1 AND cr.usuario_id = $2 AND r.usuario_id = $2
+         FOR UPDATE OF r`,
+        [id, req.userId]
+      );
+      const result = await client.query(
+        `DELETE FROM contas_receber WHERE id = $1 AND usuario_id = $2
+         RETURNING recorrencia_id, to_char(data_vencimento, 'YYYY-MM-01') AS competencia`,
+        [id, req.userId]
+      );
+      if (!result.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Conta não encontrada.' });
+      }
+      const conta = result.rows[0];
+      if (conta.recorrencia_id) {
+        await client.query(
+          `INSERT INTO contas_receber_exclusoes (usuario_id, recorrencia_id, competencia)
+           VALUES ($1, $2, $3::date) ON CONFLICT DO NOTHING`,
+          [req.userId, conta.recorrencia_id, conta.competencia]
+        );
+      }
+      await client.query('COMMIT');
       res.json({ message: 'Conta excluída!' });
-    } catch (e) { console.error(e); res.status(500).json({ error: 'Erro interno.' }); }
+    } catch (e) {
+      await client.query('ROLLBACK');
+      console.error(e);
+      res.status(500).json({ error: 'Erro interno.' });
+    } finally {
+      client.release();
+    }
   },
 };
 

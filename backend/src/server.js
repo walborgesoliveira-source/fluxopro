@@ -48,6 +48,7 @@ app.get('*', (req, res) => {
 const pool = require('./database/connection');
 async function runMigrations() {
   try {
+    await pool.query(require('./database/receivableExclusionsSchema'));
     await pool.query(`ALTER TABLE cartoes ADD COLUMN IF NOT EXISTS melhor_dia_compra INTEGER CHECK (melhor_dia_compra BETWEEN 1 AND 31)`);
     console.log('✅ Migration: coluna melhor_dia_compra verificada.');
 

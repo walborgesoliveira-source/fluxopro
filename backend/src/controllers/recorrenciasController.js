@@ -306,6 +306,7 @@ const recorrenciasController = {
         params.push(tipo);
         query += ` AND tipo = $3`;
       }
+      query += ' ORDER BY id FOR UPDATE';
       const resRecorrencias = await client.query(query, params);
       const recorrencias = resRecorrencias.rows;
       let criadas = 0;
@@ -344,6 +345,12 @@ const recorrenciasController = {
             criadas++;
           }
         } else if (rec.tipo === 'RECEBER') {
+          const excluida = await client.query(
+            `SELECT 1 FROM contas_receber_exclusoes
+             WHERE usuario_id = $1 AND recorrencia_id = $2 AND competencia = $3::date`,
+            [req.userId, rec.id, inicioMes]
+          );
+          if (excluida.rows.length) continue;
           const jaExiste = await client.query(
             'SELECT id FROM contas_receber WHERE recorrencia_id = $1 AND EXTRACT(MONTH FROM data_vencimento) = $2 AND EXTRACT(YEAR FROM data_vencimento) = $3',
             [rec.id, mes, ano]
